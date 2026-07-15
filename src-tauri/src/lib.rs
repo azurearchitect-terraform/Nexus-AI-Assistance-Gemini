@@ -6,7 +6,7 @@ mod db;
 mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::Manager;
 use tokio::task::JoinHandle;
 mod speaker;
 use capture::CaptureState;
@@ -30,7 +30,7 @@ fn get_app_version() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:nexus-ai.db", db::migrations())
@@ -45,7 +45,7 @@ pub fn run() {
         .manage(shortcuts::LicenseState::default())
         .manage(shortcuts::MoveWindowState::default())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        // .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_keychain::init())
         .plugin(tauri_plugin_shell::init()) // Add shell plugin
@@ -54,7 +54,7 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_nspanel::init());
     }
-    let mut builder = builder
+    let builder = builder
         .invoke_handler(tauri::generate_handler![
             get_app_version,
             window::set_window_height,
