@@ -30,7 +30,10 @@
         "shadow": false
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null,
+      "dangerousDisableAssetCspModification": false
+    }
   },
   "bundle": {
     "active": true,

@@ -135,11 +135,18 @@ const AutoSpeechVADInternal = ({
       recorder.start();
       setIsRecording(true);
       setEnableVAD(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Microphone access failed:", err);
+      const isNotAllowed =
+        err?.name === "NotAllowedError" ||
+        err?.name === "PermissionDeniedError" ||
+        err?.message?.includes("Permission denied");
+
       setState((prev: any) => ({
         ...prev,
-        error: "Could not access microphone. Please check browser permissions.",
+        error: isNotAllowed
+          ? "Microphone permission denied. On Windows: go to Settings → Privacy & Security → Microphone → enable access for desktop apps, then restart the app."
+          : `Could not access microphone: ${err?.message || err}`,
       }));
     }
   }, [
