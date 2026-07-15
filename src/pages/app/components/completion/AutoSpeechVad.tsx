@@ -57,7 +57,7 @@ const AutoSpeechVADInternal = ({
           autoGainControl: true,
           noiseSuppression: true,
           ...(microphoneDeviceId && microphoneDeviceId !== "default"
-            ? { deviceId: { exact: microphoneDeviceId } }
+            ? { deviceId: { ideal: microphoneDeviceId } }
             : {}),
         },
       };
