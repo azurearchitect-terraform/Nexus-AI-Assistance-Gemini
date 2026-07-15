@@ -34,4 +34,9 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  // onnxruntime-web ships pre-built WASM binaries that Vite cannot bundle.
+  // Excluding it lets the library load its own .wasm files from node_modules directly.
+  optimizeDeps: {
+    exclude: ["onnxruntime-web"],
+  },
 }));
