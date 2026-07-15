@@ -1,9 +1,9 @@
-# Pluely v1 🚀
+# Nexus AI Assistance v1 🚀
 
 _One overlay, no tab, no trace._
 
 <a href="https://pluely.com/">
-  <img src="/images/pluely-v1-listen.png" alt="The Pluely v1 overlay in Listen mode: live transcript, prompt tabs, and the answer panel, floating over the desktop" width="100%" />
+  <img src="/images/pluely-v1-listen.png" alt="The Nexus AI Assistance v1 overlay in Listen mode: live transcript, prompt tabs, and the answer panel, floating over the desktop" width="100%" />
 </a>
 
 <p align="center"><i>The actual overlay in Listen mode, floating over the desktop. Invisible on screen shares.</i></p>
@@ -27,15 +27,15 @@ _One overlay, no tab, no trace._
 
 📖 Every feature is documented at **[docs.pluely.com](https://docs.pluely.com)**, from the [5-minute quickstart](https://docs.pluely.com/docs/getting-started/quickstart) to [live transcription](https://docs.pluely.com/docs/features/listen-mode), [automatic responses](https://docs.pluely.com/docs/features/auto-responses), and [every keyboard shortcut](https://docs.pluely.com/docs/guides/overlay-shortcuts).
 
-### 🔒 Why is Pluely closed source now?
+### 🔒 Why is Nexus AI Assistance closed source now?
 
-Years of open Pluely code kept getting repackaged and sold as clones, and no license or complaint ever stopped it.
+Years of open Nexus AI Assistance code kept getting repackaged and sold as clones, and no license or complaint ever stopped it.
 So v1 ships as signed binaries while the product itself stays free to use at its core.
 The short story is [further down this page](#why-pluely-v1-is-closed-source), and everything else lives at [pluely.com](https://pluely.com).
 
 ---
 
-## 📥 **Download Pluely**
+## 📥 **Download Nexus AI Assistance**
 
 <div align="center">
 
@@ -53,9 +53,9 @@ The short story is [further down this page](#why-pluely-v1-is-closed-source), an
 
 ---
 
-## ✨ What is Pluely v1?
+## ✨ What is Nexus AI Assistance v1?
 
-Pluely v1 is a ground-up rebuild: one translucent overlay with two modes, **Ask** and **Listen**, plus a full dashboard for your chats, meetings, files, prompts, and settings. It's built for the moments where switching to a browser tab would cost you the room: interviews, sales calls, standups, lectures, live debugging.
+Nexus AI Assistance v1 is a ground-up rebuild: one translucent overlay with two modes, **Ask** and **Listen**, plus a full dashboard for your chats, meetings, files, prompts, and settings. It's built for the moments where switching to a browser tab would cost you the room: interviews, sales calls, standups, lectures, live debugging.
 
 |         🪶 **Lightweight**          |             🕶️ **Invisible**             |                ⚡ **Instant**                |
 | :---------------------------------: | :--------------------------------------: | :------------------------------------------: |
@@ -67,13 +67,13 @@ Pluely v1 is a ground-up rebuild: one translucent overlay with two modes, **Ask*
 
 <img src="/images/pluely-v1-ask.gif" alt="Ask mode: attach a screenshot of an error, ask what's breaking, get a streamed answer with follow-up suggestions" width="100%" />
 
-Type a question, dictate it with push-to-talk, or let Pluely see your screen: capture it, drag-select a region, attach files, or turn on **Use image** so every message carries a fresh screenshot. Documents go through built-in OCR and stay in context for follow-up questions. Answers stream in as Markdown, and everything is saved locally where you can search, export, or delete it.
+Type a question, dictate it with push-to-talk, or let Nexus AI Assistance see your screen: capture it, drag-select a region, attach files, or turn on **Use image** so every message carries a fresh screenshot. Documents go through built-in OCR and stay in context for follow-up questions. Answers stream in as Markdown, and everything is saved locally where you can search, export, or delete it.
 
 ## 🎧 Listen mode
 
 <img src="/images/pluely-v1-listen.gif" alt="Listen mode: live transcript of a sales call, an automatic suggested answer, and one-tap follow-up chips" width="100%" />
 
-Hit Start and Pluely transcribes your mic and system audio live, with speaker labels and language selection. Automatic responses fire when someone asks a question, after every pause, or only when you tap Suggest. Smart follow-up chips appear under each answer, generated from the actual conversation. Every session is saved as a meeting with its full transcript.
+Hit Start and Nexus AI Assistance transcribes your mic and system audio live, with speaker labels and language selection. Automatic responses fire when someone asks a question, after every pause, or only when you tap Suggest. Smart follow-up chips appear under each answer, generated from the actual conversation. Every session is saved as a meeting with its full transcript.
 
 ## 🧰 What else is in the box
 
@@ -99,11 +99,11 @@ The full tour with visuals is at **[pluely.com/features](https://pluely.com/feat
 
 ---
 
-## Why Pluely v1 is closed source
+## Why Nexus AI Assistance v1 is closed source
 
-Pluely started fully open, first under MIT and later under GPL-3. The code was lifted and sold as rebranded commercial products almost from day one, and moving to GPL-3 changed nothing: the clones ignored the license entirely. I filed complaints and takedown requests and nothing came down. Chasing license violators across countries costs more time and money than one developer has, and even code I shared privately in good faith ended up misused.
+Nexus AI Assistance started fully open, first under MIT and later under GPL-3. The code was lifted and sold as rebranded commercial products almost from day one, and moving to GPL-3 changed nothing: the clones ignored the license entirely. I filed complaints and takedown requests and nothing came down. Chasing license violators across countries costs more time and money than one developer has, and even code I shared privately in good faith ended up misused.
 
-So from v1, a complete rewrite, Pluely ships as signed binaries only. The old GPL-3 code stays available under its license in this repo's history. Please don't ask for source access; the answer will be a polite no until I decide otherwise.
+So from v1, a complete rewrite, Nexus AI Assistance ships as signed binaries only. The old GPL-3 code stays available under its license in this repo's history. Please don't ask for source access; the answer will be a polite no until I decide otherwise.
 
 What doesn't change: the free plan stays free, releases ship right here, [issues](https://github.com/iamsrikanthnani/pluely/issues) stay open for bug reports, and your data stays on your device.
 
@@ -111,7 +111,7 @@ What doesn't change: the free plan stays free, releases ship right here, [issues
 
 ## 📋 Prerequisites
 
-Pluely installs like any normal desktop app. On Linux you need the WebKitGTK runtime that Tauri apps use, see [Tauri's prerequisites page](https://v2.tauri.app/start/prerequisites/) for your distro. macOS and Windows need nothing extra: grant the [screen and microphone permissions](https://docs.pluely.com/docs/getting-started/permissions-macos) on first run and you're set.
+Nexus AI Assistance installs like any normal desktop app. On Linux you need the WebKitGTK runtime that Tauri apps use, see [Tauri's prerequisites page](https://v2.tauri.app/start/prerequisites/) for your distro. macOS and Windows need nothing extra: grant the [screen and microphone permissions](https://docs.pluely.com/docs/getting-started/permissions-macos) on first run and you're set.
 
 ---
 
@@ -125,7 +125,7 @@ Found a bug or have an idea? Open a [GitHub issue](https://github.com/iamsrikant
 
 ## 📄 License
 
-Pluely v1 and later are proprietary, closed-source software distributed as binaries. See [Why Pluely v1 is closed source](#why-pluely-v1-is-closed-source). Versions that were published under the GPL-3 remain available under that license in this repository's history.
+Nexus AI Assistance v1 and later are proprietary, closed-source software distributed as binaries. See [Why Nexus AI Assistance v1 is closed source](#why-pluely-v1-is-closed-source). Versions that were published under the GPL-3 remain available under that license in this repository's history.
 
 ---
 

@@ -726,160 +726,28 @@ pub async fn chat_stream_response(
     // Emit completion event
     let _ = app.emit("chat_stream_complete", &full_response);
 
-    if stream_started && !full_response.is_empty() {
-        tauri::async_runtime::spawn({
-            let activity_app = app.clone();
-            let activity_model = api_config.model.clone();
-            let activity_app_version = app.package_info().version.to_string();
-            let captured_metrics = usage.clone();
-            async move {
-                let _ = user_activity(
-                    activity_app,
-                    captured_metrics,
-                    activity_model,
-                    activity_app_version,
-                )
-                .await;
-            }
-        });
-    }
+
 
     Ok(full_response)
 }
 
 async fn user_activity(
-    app: AppHandle,
-    activity_metrics: Option<serde_json::Value>,
-    configured_model: String,
-    app_version: String,
+    _app: AppHandle,
+    _activity_metrics: Option<serde_json::Value>,
+    _configured_model: String,
+    _app_version: String,
 ) -> Result<(), String> {
-    let app_endpoint = match get_app_endpoint() {
-        Ok(value) => value,
-        Err(_) => return Ok(()),
-    };
-
-    let api_access_key = match get_api_access_key() {
-        Ok(value) => value,
-        Err(_) => return Ok(()),
-    };
-
-    let (license_key, instance_id, stored_model) = match get_stored_credentials(&app).await {
-        Ok(values) => values,
-        Err(_) => return Ok(()),
-    };
-
-    let machine_id = match app.machine_uid().get_machine_uid() {
-        Ok(id) => id.id.unwrap_or_else(String::new),
-        Err(_) => String::new(),
-    };
-
-    if machine_id.is_empty() {
-        return Ok(());
-    }
-
-    let ai_model = stored_model
-        .as_ref()
-        .map(|model| model.model.clone())
-        .unwrap_or(configured_model);
-
-    let mut payload = serde_json::json!({
-        "license": license_key,
-        "instance": instance_id,
-        "machine_id": machine_id,
-        "app_version": app_version,
-        "ai_model": ai_model,
-    });
-
-    if let Some(metrics) = activity_metrics {
-        if let Some(obj) = payload.as_object_mut() {
-            const METRIC_FIELD_BYTES: [u8; 5] = [117, 115, 97, 103, 101];
-            if let Ok(field) = std::str::from_utf8(&METRIC_FIELD_BYTES) {
-                obj.insert(field.to_string(), metrics);
-            }
-        }
-    }
-
-    let activity_url = format!("{}/api/activity", app_endpoint.trim_end_matches('/'));
-    let client = reqwest::Client::new();
-
-    let _ = client
-        .post(&activity_url)
-        .header("Authorization", format!("Bearer {}", api_access_key))
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await;
-
     Ok(())
 }
 
 async fn report_api_error(
-    app: AppHandle,
-    error_message: String,
-    endpoint: String,
-    model: Option<String>,
-    provider: Option<String>,
+    _app: AppHandle,
+    _error_message: String,
+    _endpoint: String,
+    _model: Option<String>,
+    _provider: Option<String>,
 ) {
-    let app_endpoint = match get_app_endpoint() {
-        Ok(value) => value,
-        Err(_) => return,
-    };
-
-    let api_access_key = match get_api_access_key() {
-        Ok(value) => value,
-        Err(_) => return,
-    };
-
-    let (license_key, instance_id, stored_model) = match get_stored_credentials(&app).await {
-        Ok(values) => values,
-        Err(_) => return,
-    };
-
-    let machine_id = match app.machine_uid().get_machine_uid() {
-        Ok(id) => id.id.unwrap_or_default(),
-        Err(_) => return,
-    };
-
-    if machine_id.is_empty() {
-        return;
-    }
-
-    let app_version = app.package_info().version.to_string();
-
-    let final_model = model
-        .or_else(|| stored_model.as_ref().map(|m| m.model.clone()))
-        .unwrap_or_default();
-
-    let final_provider = provider
-        .or_else(|| stored_model.as_ref().map(|m| m.provider.clone()))
-        .unwrap_or_default();
-
-    let payload = serde_json::json!({
-        "machine_id": machine_id,
-        "error_message": error_message,
-        "app_version": app_version,
-        "instance": instance_id,
-        "license_key": license_key,
-        "endpoint": endpoint,
-        "model": final_model,
-        "provider": final_provider
-    });
-
-    let error_url = format!("{}/api/error", app_endpoint.trim_end_matches('/'));
-    let client = reqwest::Client::new();
-
-    tracing::debug!("Reporting API error: {:?}", payload);
-
-    if let Err(e) = client
-        .post(&error_url)
-        .header("Authorization", format!("Bearer {}", api_access_key))
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await
-    {
-        tracing::warn!("Failed to report API error: {}", e);
-    }
+    // Disabled for privacy
 }
 
 // Models API Command
@@ -1088,11 +956,8 @@ pub async fn create_system_prompt(
 
 // Helper command to check if license is available
 #[tauri::command]
-pub async fn check_license_status(app: AppHandle) -> Result<bool, String> {
-    match get_stored_credentials(&app).await {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false),
-    }
+pub async fn check_license_status(_app: AppHandle) -> Result<bool, String> {
+    Ok(true)
 }
 
 #[allow(dead_code)]

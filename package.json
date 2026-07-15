@@ -1,8 +1,8 @@
 {
-  "name": "pluely",
+  "name": "nexus-ai-assistance",
   "private": false,
   "version": "0.1.9",
-  "description": "The Open Source Alternative to Cluely - A lightning-fast, privacy-first AI assistant that works seamlessly during meetings, interviews, and conversations without anyone knowing.",
+  "description": "Nexus AI Assistance - A lightning-fast, privacy-first AI assistant that works seamlessly during meetings, interviews, and conversations without anyone knowing.",
   "author": {
     "name": "Srikanth Nani",
     "email": "mail@srikanthnani.com",
@@ -80,8 +80,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.12",
     "tauri-plugin-keychain": "^2.0.1",
-    "tauri-plugin-macos-permissions-api": "^2.3.0",
-    "tauri-plugin-posthog-api": "^0.2.2"
+    "tauri-plugin-macos-permissions-api": "^2.3.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

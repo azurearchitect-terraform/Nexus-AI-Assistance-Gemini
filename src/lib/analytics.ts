@@ -1,4 +1,3 @@
-import { PostHog } from "tauri-plugin-posthog-api";
 
 /**
  * Event names for tracking
@@ -14,24 +13,15 @@ export const ANALYTICS_EVENTS = {
  * Capture an analytics event
  */
 export const captureEvent = async (
-  eventName: string,
-  properties?: Record<string, any>
+  _eventName: string,
+  _properties?: Record<string, any>
 ) => {
-  try {
-    await PostHog.capture(eventName, properties || {});
-  } catch (error) {
-    // Silently fail - we don't want analytics to break the app
-    console.debug("Analytics event failed:", eventName, error);
-  }
+  // Disabled for privacy
 };
 
 /**
  * Track app initialization
  */
-export const trackAppStart = async (appVersion: string, instanceId: string) => {
-  await captureEvent(ANALYTICS_EVENTS.APP_STARTED, {
-    app_version: appVersion,
-    platform: navigator.platform,
-    instance_id: instanceId,
-  });
+export const trackAppStart = async (_appVersion: string, _instanceId: string) => {
+  // Disabled for privacy
 };
