@@ -127,8 +127,8 @@ export const SPEECH_TO_TEXT_PROVIDERS = [
     responseContentPath: "candidates[0].content.parts[0].text",
     streaming: false,
     models: [
-      "gemini-3.5-live-translate-preview",
-      "gemini-3.1-flash-live-preview",
+      "gemini-2.5-flash",
+      "gemini-3.1-pro-preview",
     ],
   },
 ];
