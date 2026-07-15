@@ -246,8 +246,9 @@ impl SpeakerStream {
                     }
 
                     if h_event.wait_for_event(3000).is_err() {
-                        error!("Pluely timeout error, stopping capture");
-                        break;
+                        // In loopback mode, events stop when no audio is playing. 
+                        // Just continue waiting instead of breaking the capture loop.
+                        continue;
                     }
 
                     let mut temp_queue = VecDeque::new();

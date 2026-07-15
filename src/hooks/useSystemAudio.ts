@@ -7,6 +7,7 @@ import { fetchSTT, fetchAIResponse } from "@/lib/functions";
 import {
   DEFAULT_QUICK_ACTIONS,
   DEFAULT_SYSTEM_PROMPT,
+  MEETING_ASSISTANT_PROMPT,
   STORAGE_KEYS,
 } from "@/config";
 import {
@@ -95,8 +96,8 @@ export function useSystemAudio() {
   });
 
   // Context management states
-  const [useSystemPrompt, setUseSystemPrompt] = useState<boolean>(true);
-  const [contextContent, setContextContent] = useState<string>("");
+  const [useSystemPrompt, setUseSystemPrompt] = useState<boolean>(false);
+  const [contextContent, setContextContent] = useState<string>(MEETING_ASSISTANT_PROMPT);
 
   const {
     selectedSttProvider,
@@ -119,8 +120,8 @@ export function useSystemAudio() {
     if (savedContext) {
       try {
         const parsed = JSON.parse(savedContext);
-        setUseSystemPrompt(parsed.useSystemPrompt ?? true);
-        setContextContent(parsed.contextContent ?? "");
+        setUseSystemPrompt(parsed.useSystemPrompt ?? false);
+        setContextContent(parsed.contextContent ?? MEETING_ASSISTANT_PROMPT);
       } catch (error) {
         console.error("Failed to load system audio context:", error);
       }
@@ -277,8 +278,8 @@ export function useSystemAudio() {
                 setError("");
 
                 const effectiveSystemPrompt = useSystemPrompt
-                  ? systemPrompt || DEFAULT_SYSTEM_PROMPT
-                  : contextContent || DEFAULT_SYSTEM_PROMPT;
+                  ? systemPrompt || MEETING_ASSISTANT_PROMPT
+                  : contextContent || MEETING_ASSISTANT_PROMPT;
 
                 const previousMessages = conversation.messages.map((msg) => {
                   return { role: msg.role, content: msg.content };
@@ -391,8 +392,8 @@ export function useSystemAudio() {
     setError("");
 
     const effectiveSystemPrompt = useSystemPrompt
-      ? systemPrompt || DEFAULT_SYSTEM_PROMPT
-      : contextContent || DEFAULT_SYSTEM_PROMPT;
+      ? systemPrompt || MEETING_ASSISTANT_PROMPT
+      : contextContent || MEETING_ASSISTANT_PROMPT;
 
     // Include the most recent transcription in conversation history if it exists
     let updatedMessages = [...conversation.messages];
@@ -778,7 +779,7 @@ export function useSystemAudio() {
     setIsProcessing(false);
     setIsAIProcessing(false);
     setIsPopoverOpen(false);
-    setUseSystemPrompt(true);
+    setUseSystemPrompt(false);
   }, []);
 
   // Update VAD configuration
