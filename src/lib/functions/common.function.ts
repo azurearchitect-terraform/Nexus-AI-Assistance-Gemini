@@ -177,6 +177,7 @@ export function deepVariableReplacer(
     let result = node;
     for (const [key, value] of Object.entries(variables)) {
       result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
+      result = result.replace(new RegExp(`%7B%7B${key}%7D%7D`, "gi"), value);
     }
     return result;
   }

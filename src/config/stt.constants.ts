@@ -102,4 +102,29 @@ export const SPEECH_TO_TEXT_PROVIDERS = [
     responseContentPath: "results[0].alternatives[0].transcript",
     streaming: false,
   },
+  {
+    id: "gemini-stt",
+    name: "Gemini STT",
+    curl: `curl "https://generativelanguage.googleapis.com/v1beta/models/{{MODEL}}:generateContent?key={{API_KEY}}" \\
+      -H "Content-Type: application/json" \\
+      -d '{
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "Please transcribe this audio exactly as spoken, with no additional commentary, notes, or formatting."
+              },
+              {
+                "inline_data": {
+                  "mime_type": "audio/wav",
+                  "data": "{{AUDIO}}"
+                }
+              }
+            ]
+          }
+        ]
+      }'`,
+    responseContentPath: "candidates[0].content.parts[0].text",
+    streaming: false,
+  },
 ];

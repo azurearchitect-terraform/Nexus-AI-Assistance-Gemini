@@ -4,4 +4,5 @@ export interface TYPE_PROVIDER {
   responseContentPath?: string;
   isCustom?: boolean;
   curl: string;
+  models?: string[];
 }

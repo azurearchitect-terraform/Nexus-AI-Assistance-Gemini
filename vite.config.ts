@@ -34,4 +34,7 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  optimizeDeps: {
+    exclude: ["@ricky0123/vad-web", "@ricky0123/vad-react", "onnxruntime-web"],
+  },
 }));

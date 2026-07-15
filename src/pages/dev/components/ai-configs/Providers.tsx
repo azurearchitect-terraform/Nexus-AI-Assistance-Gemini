@@ -184,6 +184,12 @@ export const Providers = ({
               return selectedAIProvider.variables[variable.key] || "";
             };
 
+            const providerConfig = allAiProviders?.find(
+              (p) => p?.id === selectedAIProvider?.provider
+            );
+            const isModelVar = variable?.key?.toLowerCase() === "model";
+            const hasModels = providerConfig?.models && providerConfig.models.length > 0;
+
             return (
               <div className="space-y-1" key={variable?.key}>
                 <Header
@@ -192,34 +198,49 @@ export const Providers = ({
                     /_/g,
                     " "
                   )} for ${
-                    allAiProviders?.find(
-                      (p) => p?.id === selectedAIProvider?.provider
-                    )?.isCustom
+                    providerConfig?.isCustom
                       ? "Custom Provider"
                       : selectedAIProvider?.provider
                   }`}
                 />
-                <TextInput
-                  placeholder={`Enter ${
-                    allAiProviders?.find(
-                      (p) => p?.id === selectedAIProvider?.provider
-                    )?.isCustom
-                      ? "Custom Provider"
-                      : selectedAIProvider?.provider
-                  } ${variable?.key?.replace(/_/g, " ") || "value"}`}
-                  value={getVariableValue()}
-                  onChange={(value) => {
-                    if (!variable?.key || !selectedAIProvider) return;
+                {isModelVar && hasModels ? (
+                  <Selection
+                    selected={getVariableValue()}
+                    options={providerConfig.models!.map((m) => ({ label: m, value: m }))}
+                    placeholder="Select a model"
+                    onChange={(value) => {
+                      if (!variable?.key || !selectedAIProvider) return;
 
-                    onSetSelectedAIProvider({
-                      ...selectedAIProvider,
-                      variables: {
-                        ...selectedAIProvider.variables,
-                        [variable.key]: value,
-                      },
-                    });
-                  }}
-                />
+                      onSetSelectedAIProvider({
+                        ...selectedAIProvider,
+                        variables: {
+                          ...selectedAIProvider.variables,
+                          [variable.key]: value,
+                        },
+                      });
+                    }}
+                  />
+                ) : (
+                  <TextInput
+                    placeholder={`Enter ${
+                      providerConfig?.isCustom
+                        ? "Custom Provider"
+                        : selectedAIProvider?.provider
+                    } ${variable?.key?.replace(/_/g, " ") || "value"}`}
+                    value={getVariableValue()}
+                    onChange={(value) => {
+                      if (!variable?.key || !selectedAIProvider) return;
+
+                      onSetSelectedAIProvider({
+                        ...selectedAIProvider,
+                        variables: {
+                          ...selectedAIProvider.variables,
+                          [variable.key]: value,
+                        },
+                      });
+                    }}
+                  />
+                )}
               </div>
             );
           })}
