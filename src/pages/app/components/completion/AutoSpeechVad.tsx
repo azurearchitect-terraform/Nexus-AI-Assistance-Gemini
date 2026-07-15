@@ -77,7 +77,9 @@ const AutoSpeechVADInternal = ({
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
       };
 
       recorder.onstop = async () => {
@@ -86,7 +88,14 @@ const AutoSpeechVADInternal = ({
         });
         chunksRef.current = [];
 
-        if (audioBlob.size < 1000) return; // ignore very short/empty recordings
+        // If no audio was captured at all
+        if (audioBlob.size === 0) {
+          setState((prev: any) => ({
+            ...prev,
+            error: "No audio captured. Please ensure your microphone is working.",
+          }));
+          return;
+        }
 
         const usePluelyAPI = await shouldUsePluelyAPI();
 
@@ -118,8 +127,13 @@ const AutoSpeechVADInternal = ({
             audio: audioBlob,
           });
 
-          if (transcription) {
+          if (transcription && transcription.trim().length > 0) {
             submit(transcription);
+          } else {
+             setState((prev: any) => ({
+              ...prev,
+              error: "Transcription returned empty text. Could not hear clearly.",
+            }));
           }
         } catch (err) {
           console.error("Transcription failed:", err);
@@ -132,7 +146,8 @@ const AutoSpeechVADInternal = ({
         }
       };
 
-      recorder.start();
+      // Use a timeslice of 200ms to ensure chunks are pushed regularly
+      recorder.start(200);
       setIsRecording(true);
       setEnableVAD(true);
     } catch (err: any) {
