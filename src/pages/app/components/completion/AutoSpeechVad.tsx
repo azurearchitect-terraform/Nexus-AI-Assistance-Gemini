@@ -1,11 +1,9 @@
 import { fetchSTT } from "@/lib";
 import { UseCompletionReturn } from "@/types";
-import { useMicVAD } from "@ricky0123/vad-react";
 import { LoaderCircleIcon, MicIcon, MicOffIcon } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components";
 import { useApp } from "@/contexts";
-import { floatArrayToWav } from "@/lib/utils";
 import { shouldUsePluelyAPI } from "@/lib/functions/pluely.api";
 
 interface AutoSpeechVADProps {
@@ -15,66 +13,87 @@ interface AutoSpeechVADProps {
   microphoneDeviceId?: string;
 }
 
+/**
+ * Push-to-talk audio recorder.
+ * Replaces the WASM-based VAD which caused app freezes due to loading
+ * a 2MB ONNX neural network model via WebAssembly workers at runtime.
+ *
+ * Usage: Click once to START recording, click again to STOP and transcribe.
+ */
 const AutoSpeechVADInternal = ({
   submit,
   setState,
   setEnableVAD,
   microphoneDeviceId,
 }: AutoSpeechVADProps) => {
+  const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const { selectedSttProvider, allSttProviders } = useApp();
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  const audioConstraints: MediaTrackConstraints =
-    microphoneDeviceId && microphoneDeviceId !== "default"
-      ? { deviceId: { exact: microphoneDeviceId } }
-      : {};
+  const stopAndTranscribe = useCallback(async () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
 
-  const vad = useMicVAD({
-    workletURL: "/vad.worklet.bundle.min.js",
-    modelURL: "/silero_vad_v5.onnx",
-    ortConfig: (ort) => {
-      ort.env.wasm.numThreads = 1;
-      ort.env.wasm.wasmPaths = "/";
-    },
-    userSpeakingThreshold: 0.6,
-    startOnLoad: true,
-    getStream: async () => {
-      return await navigator.mediaDevices.getUserMedia({
+    // Stop the recorder — this triggers onstop which does the transcription
+    recorder.stop();
+
+    // Also stop all mic tracks to release the mic indicator
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    setIsRecording(false);
+    setEnableVAD(false);
+  }, [setEnableVAD]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const constraints: MediaStreamConstraints = {
         audio: {
           channelCount: 1,
           echoCancellation: true,
           autoGainControl: true,
           noiseSuppression: true,
-          ...audioConstraints,
+          ...(microphoneDeviceId && microphoneDeviceId !== "default"
+            ? { deviceId: { exact: microphoneDeviceId } }
+            : {}),
         },
-      });
-    },
-    resumeStream: async () => {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          autoGainControl: true,
-          noiseSuppression: true,
-          ...audioConstraints,
-        },
-      });
-    },
-    onSpeechEnd: async (audio) => {
-      try {
-        // convert float32array to blob
-        const audioBlob = floatArrayToWav(audio, 16000, "wav");
+      };
 
-        let transcription: string;
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      chunksRef.current = [];
+
+      // Prefer webm/opus, fall back to whatever the browser supports
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "";
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        chunksRef.current = [];
+
+        if (audioBlob.size < 1000) return; // ignore very short/empty recordings
+
         const usePluelyAPI = await shouldUsePluelyAPI();
 
-        // Check if we have a configured speech provider
         if (!selectedSttProvider.provider && !usePluelyAPI) {
-          console.warn("No speech provider selected");
           setState((prev: any) => ({
             ...prev,
-            error:
-              "No speech provider selected. Please select one in settings.",
+            error: "No speech provider selected. Please select one in settings.",
           }));
           return;
         }
@@ -84,61 +103,83 @@ const AutoSpeechVADInternal = ({
         );
 
         if (!providerConfig && !usePluelyAPI) {
-          console.warn("Selected speech provider configuration not found");
           setState((prev: any) => ({
             ...prev,
-            error:
-              "Speech provider configuration not found. Please check your settings.",
+            error: "Speech provider configuration not found. Please check settings.",
           }));
           return;
         }
 
-        setIsTranscribing(true);
+        try {
+          setIsTranscribing(true);
+          const transcription = await fetchSTT({
+            provider: usePluelyAPI ? undefined : providerConfig,
+            selectedProvider: selectedSttProvider,
+            audio: audioBlob,
+          });
 
-        // Use the fetchSTT function for all providers
-        transcription = await fetchSTT({
-          provider: usePluelyAPI ? undefined : providerConfig,
-          selectedProvider: selectedSttProvider,
-          audio: audioBlob,
-        });
-
-        if (transcription) {
-          submit(transcription);
+          if (transcription) {
+            submit(transcription);
+          }
+        } catch (err) {
+          console.error("Transcription failed:", err);
+          setState((prev: any) => ({
+            ...prev,
+            error: err instanceof Error ? err.message : "Transcription failed",
+          }));
+        } finally {
+          setIsTranscribing(false);
         }
-      } catch (error) {
-        console.error("Failed to transcribe audio:", error);
-        setState((prev: any) => ({
-          ...prev,
-          error:
-            error instanceof Error ? error.message : "Transcription failed",
-        }));
-      } finally {
-        setIsTranscribing(false);
-      }
-    },
-  });
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setEnableVAD(true);
+    } catch (err) {
+      console.error("Microphone access failed:", err);
+      setState((prev: any) => ({
+        ...prev,
+        error: "Could not access microphone. Please check browser permissions.",
+      }));
+    }
+  }, [
+    microphoneDeviceId,
+    selectedSttProvider,
+    allSttProviders,
+    submit,
+    setState,
+    setEnableVAD,
+  ]);
+
+  const handleClick = useCallback(async () => {
+    if (isRecording) {
+      await stopAndTranscribe();
+    } else {
+      await startRecording();
+    }
+  }, [isRecording, startRecording, stopAndTranscribe]);
 
   return (
     <>
       <Button
         size="icon"
-        onClick={() => {
-          if (vad.listening) {
-            vad.pause();
-            setEnableVAD(false);
-          } else {
-            vad.start();
-            setEnableVAD(true);
-          }
-        }}
-        className="cursor-pointer"
+        onClick={handleClick}
+        disabled={isTranscribing}
+        className={`cursor-pointer transition-colors ${
+          isRecording ? "text-red-500 hover:text-red-600" : ""
+        }`}
+        title={
+          isTranscribing
+            ? "Transcribing..."
+            : isRecording
+            ? "Click to stop recording"
+            : "Click to start recording"
+        }
       >
         {isTranscribing ? (
           <LoaderCircleIcon className="h-4 w-4 animate-spin text-green-500" />
-        ) : vad.userSpeaking ? (
-          <LoaderCircleIcon className="h-4 w-4 animate-spin" />
-        ) : vad.listening ? (
-          <MicOffIcon className="h-4 w-4 animate-pulse" />
+        ) : isRecording ? (
+          <MicOffIcon className="h-4 w-4 animate-pulse text-red-500" />
         ) : (
           <MicIcon className="h-4 w-4" />
         )}
