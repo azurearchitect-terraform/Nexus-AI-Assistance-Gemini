@@ -35,6 +35,6 @@ export default defineConfig(async () => ({
     },
   },
   optimizeDeps: {
-    exclude: ["@ricky0123/vad-web", "@ricky0123/vad-react", "onnxruntime-web"],
+    exclude: ["onnxruntime-web"],
   },
 }));
