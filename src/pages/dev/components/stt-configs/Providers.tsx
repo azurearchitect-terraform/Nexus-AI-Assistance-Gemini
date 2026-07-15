@@ -182,6 +182,12 @@ export const Providers = ({
               return selectedSttProvider.variables[variable.key] || "";
             };
 
+            const providerConfig = allSttProviders?.find(
+              (p) => p?.id === selectedSttProvider?.provider
+            );
+            const isModelVar = variable?.key?.toLowerCase() === "model";
+            const hasModels = providerConfig?.models && providerConfig.models.length > 0;
+
             return (
               <div className="space-y-1" key={variable?.key}>
                 <Header
@@ -190,34 +196,48 @@ export const Providers = ({
                     /_/g,
                     " "
                   )} for ${
-                    allSttProviders?.find(
-                      (p) => p?.id === selectedSttProvider?.provider
-                    )?.isCustom
+                    providerConfig?.isCustom
                       ? "Custom Provider"
                       : selectedSttProvider?.provider
                   }`}
                 />
-                <TextInput
-                  placeholder={`Enter ${
-                    allSttProviders?.find(
-                      (p) => p?.id === selectedSttProvider?.provider
-                    )?.isCustom
-                      ? "Custom Provider"
-                      : selectedSttProvider?.provider
-                  } ${variable?.key?.replace(/_/g, " ") || "value"}`}
-                  value={getVariableValue()}
-                  onChange={(value) => {
-                    if (!variable?.key || !selectedSttProvider) return;
+                {isModelVar && hasModels ? (
+                  <Selection
+                    selected={getVariableValue()}
+                    options={providerConfig.models!.map((m) => ({ label: m, value: m }))}
+                    placeholder="Select a model"
+                    onChange={(value) => {
+                      if (!variable?.key || !selectedSttProvider) return;
+                      onSetSelectedSttProvider({
+                        ...selectedSttProvider,
+                        variables: {
+                          ...selectedSttProvider.variables,
+                          [variable.key]: value,
+                        },
+                      });
+                    }}
+                  />
+                ) : (
+                  <TextInput
+                    placeholder={`Enter ${
+                      providerConfig?.isCustom
+                        ? "Custom Provider"
+                        : selectedSttProvider?.provider
+                    } ${variable?.key?.replace(/_/g, " ") || "value"}`}
+                    value={getVariableValue()}
+                    onChange={(value) => {
+                      if (!variable?.key || !selectedSttProvider) return;
 
-                    onSetSelectedSttProvider({
-                      ...selectedSttProvider,
-                      variables: {
-                        ...selectedSttProvider.variables,
-                        [variable.key]: value,
-                      },
-                    });
-                  }}
-                />
+                      onSetSelectedSttProvider({
+                        ...selectedSttProvider,
+                        variables: {
+                          ...selectedSttProvider.variables,
+                          [variable.key]: value,
+                        },
+                      });
+                    }}
+                  />
+                )}
               </div>
             );
           })}
