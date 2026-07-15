@@ -32,6 +32,10 @@ const AutoSpeechVADInternal = ({
   const vad = useMicVAD({
     workletURL: "/vad.worklet.bundle.min.js",
     modelURL: "/silero_vad_v5.onnx",
+    ortConfig: (ort) => {
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.wasmPaths = "/";
+    },
     userSpeakingThreshold: 0.6,
     startOnLoad: true,
     getStream: async () => {
