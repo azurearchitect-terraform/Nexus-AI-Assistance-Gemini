@@ -886,6 +886,40 @@ export function useSystemAudio() {
     ignoreContinuousRecording,
   ]);
 
+  // Stealth Panic Event Listener
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    
+    const setupListener = async () => {
+      try {
+        unlisten = await listen("stealth-panic-triggered", () => {
+          setCapturing(false);
+          setIsContinuousMode(false);
+          setIsRecordingInContinuousMode(false);
+          setIsProcessing(false);
+          setIsAIProcessing(false);
+          setLastTranscription("");
+          setLastAIResponse("");
+          setConversation({
+            id: "",
+            title: "",
+            messages: [],
+            createdAt: 0,
+            updatedAt: 0,
+          });
+        });
+      } catch (err) {
+        console.error("Failed to setup stealth panic listener:", err);
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   return {
     capturing,
     isProcessing,

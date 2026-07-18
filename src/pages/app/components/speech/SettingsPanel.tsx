@@ -16,9 +16,11 @@ import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
+  TooltipProvider,
   TooltipTrigger,
   CostEstimator,
 } from "@/components";
+import { useTheme } from "@/contexts";
 import {
   ChevronDownIcon,
   SettingsIcon,
@@ -80,6 +82,7 @@ export const SettingsPanel = ({
 }: SettingsPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const { transparency, onSetTransparency } = useTheme();
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
 
   // Determine current sensitivity preset based on values
@@ -156,6 +159,29 @@ export const SettingsPanel = ({
       {/* Settings Content */}
       {isOpen && (
         <div className="px-3 pb-3 space-y-4">
+          {/* Appearance Section */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Appearance
+            </h4>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label className="text-xs font-medium">Window Transparency</Label>
+                <span className="text-[10px] text-muted-foreground font-mono">{transparency}%</span>
+              </div>
+              <Slider
+                value={[transparency]}
+                onValueChange={(val: number[]) => onSetTransparency(val[0])}
+                min={10}
+                max={100}
+                step={1}
+                className="w-full"
+              />
+            </div>
+          </div>
+
+          <div className="h-px bg-border/50 w-full" />
+
           {/* Recording Settings Section */}
           <div className="space-y-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">

@@ -28,7 +28,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { PermissionFlow } from "./PermissionFlow";
 import { QuickActions } from "./QuickActions";
 import { Warning } from "./Warning";
-import { useSystemAudioType } from "@/hooks";
+import { useSystemAudioType, useKeywordScanner } from "@/hooks";
 import { useApp } from "@/contexts";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +71,7 @@ export const SystemAudio = (props: useSystemAudioType) => {
   } = props;
 
   const { hasActiveLicense, supportsImages } = useApp();
+  const { activeTrigger, triggers } = useKeywordScanner(lastTranscription);
 
   // View mode toggle
   const [conversationMode, setConversationMode] = useState(false);
@@ -205,7 +206,13 @@ export const SystemAudio = (props: useSystemAudioType) => {
         <PopoverContent
           align="end"
           side="bottom"
-          className="select-none w-screen p-0 border shadow-lg overflow-hidden border-input/50"
+          className="select-none w-screen p-0 border shadow-lg overflow-hidden border-input/50 transition-shadow duration-300"
+          style={{
+            boxShadow: activeTrigger
+              ? `inset 0 0 15px ${activeTrigger.color}, 0 0 25px ${activeTrigger.color}`
+              : undefined,
+            borderColor: activeTrigger ? activeTrigger.color : undefined,
+          }}
           sideOffset={8}
         >
           <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
@@ -283,6 +290,24 @@ export const SystemAudio = (props: useSystemAudioType) => {
                   )}
                 </div>
               </div>
+              
+              {/* Keyword Triggers Legend */}
+              {triggers && triggers.length > 0 && !setupRequired && (
+                <div className="mt-2 flex flex-wrap gap-2 items-center">
+                  <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Triggers:</span>
+                  {triggers.map((t) => (
+                    <div key={t.id} className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: t.color }} />
+                      <span className="text-[10px] text-muted-foreground">{t.keyword}</span>
+                    </div>
+                  ))}
+                  {activeTrigger && (
+                    <span className="text-[10px] ml-auto font-bold animate-pulse" style={{ color: activeTrigger.color }}>
+                      🔥 Detected: {activeTrigger.keyword}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>

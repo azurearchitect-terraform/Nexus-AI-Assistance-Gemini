@@ -8,6 +8,8 @@ export * from "./useSettings";
 export * from "./useGlobalShortcuts";
 export * from "./useShortcuts";
 export * from "./useSystemAudio";
+export * from "./usePromptRouter";
+export * from "./useKeywordScanner";
 export * from "./useHistory";
 export * from "./useCopyToClipboard";
 export * from "./useTitles";

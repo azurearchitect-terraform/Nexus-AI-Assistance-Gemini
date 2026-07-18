@@ -71,4 +71,14 @@ export const DEFAULT_SHORTCUT_ACTIONS: ShortcutAction[] = [
       linux: "ctrl+shift+s",
     },
   },
+  {
+    id: "stealth_panic",
+    name: "Stealth Panic Button",
+    description: "Instantly hide window and stop all recording/processing",
+    defaultKey: {
+      macos: "cmd+shift+x",
+      windows: "ctrl+shift+x",
+      linux: "ctrl+shift+x",
+    },
+  },
 ];

@@ -107,8 +107,8 @@ pub fn handle_shortcut_action<R: Runtime>(app: &AppHandle<R>, action_id: &str) {
         "move_window_left" => handle_move_window(app, "left"),
         "move_window_right" => handle_move_window(app, "right"),
         "audio_recording" => handle_audio_shortcut(app),
-        "screenshot" => handle_screenshot_shortcut(app),
         "system_audio" => handle_system_audio_shortcut(app),
+        "stealth_panic" => handle_stealth_panic(app),
         custom_action => {
             // Emit custom action event for frontend to handle
             if let Some(window) = app.get_webview_window("main") {
@@ -273,7 +273,26 @@ fn handle_audio_shortcut<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// Handle screenshot shortcut
+pub fn handle_stealth_panic<R: Runtime>(app: &AppHandle<R>) {
+    // 1. Hide the window immediately
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+    
+    // 2. Stop audio capture and any ongoing AI generation
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // Emit event to frontend to reset state immediately
+        if let Some(window) = app_clone.get_webview_window("main") {
+            let _ = window.emit("stealth-panic-triggered", ());
+        }
+        
+        // Stop the rust-side audio capture
+        let _ = crate::speaker::stop_system_audio_capture(app_clone).await;
+    });
+}
+
+// Window movement handlershortcut
 fn handle_screenshot_shortcut<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         // Emit event to trigger screenshot - frontend will determine auto/manual mode

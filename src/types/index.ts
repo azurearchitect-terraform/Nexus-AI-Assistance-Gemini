@@ -3,6 +3,8 @@ export * from "./completion.hook";
 export * from "./context.type";
 export * from "./provider.type";
 export * from "./settings.hook";
+export * from "./settings";
+export * from "./keywords";
 export * from "./completion";
 export * from "./system-prompts";
 export * from "./shortcuts";
