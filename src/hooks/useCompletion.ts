@@ -76,7 +76,7 @@ export const useCompletion = () => {
   const [messageHistoryOpen, setMessageHistoryOpen] = useState(false);
   const [isFilesPopoverOpen, setIsFilesPopoverOpen] = useState(false);
   const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
-  const [keepEngaged, setKeepEngaged] = useState(false);
+  const [keepEngaged, setKeepEngaged] = useState(true);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isProcessingScreenshotRef = useRef(false);
   const screenshotConfigRef = useRef(screenshotConfiguration);

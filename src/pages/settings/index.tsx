@@ -5,6 +5,7 @@ import {
   AutostartToggle,
 } from "./components";
 import { PageLayout } from "@/layouts";
+import { PrivacyToggle } from "@/components";
 
 const Settings = () => {
   return (
@@ -20,6 +21,9 @@ const Settings = () => {
 
       {/* Always On Top Toggle */}
       <AlwaysOnTopToggle />
+
+      {/* Screen Share Protection */}
+      <PrivacyToggle />
     </PageLayout>
   );
 };

@@ -11,6 +11,7 @@ import {
   generateMessageId,
   generateRequestId,
   getResponseSettings,
+  routePrompt,
 } from "@/lib";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -225,11 +226,14 @@ export const useChatCompletion = (
         let fullResponse = "";
 
         try {
+          // Dynamically route the prompt
+          const routedPrompt = await routePrompt(input, selectedAIProvider.apiKey || "");
+
           // Use the fetchAIResponse function with signal
           for await (const chunk of fetchAIResponse({
             provider: usePluelyAPI ? undefined : provider,
             selectedProvider: selectedAIProvider,
-            systemPrompt: systemPrompt || undefined,
+            systemPrompt: routedPrompt,
             history: messageHistory,
             userMessage: input,
             imagesBase64,

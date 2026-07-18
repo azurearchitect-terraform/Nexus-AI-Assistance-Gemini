@@ -12,6 +12,12 @@ import {
   SelectValue,
   SelectLabel,
   SelectGroup,
+  NumberInput,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  CostEstimator,
 } from "@/components";
 import {
   ChevronDownIcon,
@@ -60,6 +66,7 @@ interface SettingsPanelProps {
   setUseSystemPrompt: (value: boolean) => void;
   contextContent: string;
   setContextContent: (content: string) => void;
+  transcript?: string;
 }
 
 export const SettingsPanel = ({
@@ -69,6 +76,7 @@ export const SettingsPanel = ({
   setUseSystemPrompt,
   contextContent,
   setContextContent,
+  transcript,
 }: SettingsPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -130,9 +138,12 @@ export const SettingsPanel = ({
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <SettingsIcon className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium">Settings</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <SettingsIcon className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium">Settings</span>
+          </div>
+          {transcript && <CostEstimator transcript={transcript} />}
         </div>
         <ChevronDownIcon
           className={cn(

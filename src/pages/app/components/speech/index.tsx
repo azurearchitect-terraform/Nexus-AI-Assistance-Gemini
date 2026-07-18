@@ -5,6 +5,11 @@ import {
   PopoverTrigger,
   PopoverContent,
   ScrollArea,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  CostEstimator,
 } from "@/components";
 import {
   HeadphonesIcon,
@@ -365,6 +370,7 @@ export const SystemAudio = (props: useSystemAudioType) => {
                       setUseSystemPrompt={setUseSystemPrompt}
                       contextContent={contextContent}
                       setContextContent={setContextContent}
+                      transcript={lastTranscription}
                     />
 
                     {/* Help/Keyboard Shortcuts */}

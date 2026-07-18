@@ -51,6 +51,10 @@ ringbuf = "0.4.8"
 tauri-plugin-shell = "2.3.1"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-machine-uid = "0.1.2"
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+url = "2.5"
+rusqlite = { version = "0.31", features = ["bundled"] }
+tiktoken = "3.5.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-macos-permissions = "2"
@@ -59,6 +63,7 @@ tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wasapi = "0.19.0"
+windows = { version = "0.58.0", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libpulse-binding = "2.30.1"

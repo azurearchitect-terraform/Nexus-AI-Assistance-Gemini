@@ -5,6 +5,8 @@ mod capture;
 mod db;
 mod shortcuts;
 mod window;
+mod meeting;
+mod cost;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tokio::task::JoinHandle;
@@ -28,6 +30,32 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn set_screen_share_protection(window: tauri::Window, enable: bool) -> Result<(), String> {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE};
+
+    // Hide or show the taskbar icon
+    let _ = window.set_skip_taskbar(enable);
+
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    let hwnd = HWND(hwnd.0 as _);
+    let affinity = if enable { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
+
+    unsafe {
+        SetWindowDisplayAffinity(hwnd, affinity)
+            .map_err(|e| format!("Failed to set display affinity: {}", e))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn set_screen_share_protection(_window: tauri::Window, _enable: bool) -> Result<(), String> {
+    println!("Screen share protection is only supported on Windows.");
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -38,6 +66,7 @@ pub fn run() {
         )
         .manage(AudioState::default())
         .manage(CaptureState::default())
+        .manage(meeting::MeetingManager::default())
         .manage(shortcuts::WindowVisibility {
             is_hidden: Mutex::new(false),
         })
@@ -57,6 +86,7 @@ pub fn run() {
     let builder = builder
         .invoke_handler(tauri::generate_handler![
             get_app_version,
+            set_screen_share_protection,
             window::set_window_height,
             window::open_dashboard,
             window::toggle_dashboard,
@@ -99,6 +129,10 @@ pub fn run() {
             speaker::get_audio_sample_rate,
             speaker::get_input_devices,
             speaker::get_output_devices,
+            meeting::start_meeting,
+            meeting::stop_meeting,
+            meeting::trigger_summary,
+            cost::estimate_openai_cost,
         ])
         .setup(|app| {
             // Setup main window positioning

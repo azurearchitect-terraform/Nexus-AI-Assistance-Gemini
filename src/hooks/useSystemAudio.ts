@@ -545,10 +545,17 @@ export function useSystemAudio() {
         setError("Failed to get AI response");
       } finally {
         setIsAIProcessing(false);
-        // No auto-restart - user manually controls when to start next recording
+        // Auto-restart if in VAD mode and still capturing
+        if (vadConfig.enabled && capturing) {
+          const deviceId = selectedAudioDevices.output.id !== "default" ? selectedAudioDevices.output.id : null;
+          invoke("start_system_audio_capture", {
+            vadConfig: vadConfig,
+            deviceId: deviceId,
+          }).catch(console.error);
+        }
       }
     },
-    [selectedAIProvider, allAiProviders, conversation.messages]
+    [selectedAIProvider, allAiProviders, conversation.messages, vadConfig, capturing, selectedAudioDevices.output.id]
   );
 
   const startCapture = useCallback(async () => {
