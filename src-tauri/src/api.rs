@@ -773,7 +773,7 @@ pub async fn fetch_models(app: AppHandle) -> Result<Vec<Model>, String> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/models", app_endpoint);
 
-    let response = client
+    let response = match client
         .post(&url)
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", api_access_key))
@@ -783,20 +783,11 @@ pub async fn fetch_models(app: AppHandle) -> Result<Vec<Model>, String> {
         .header("app_version", &app_version)
         .send()
         .await
-        .map_err(|e| {
-            let error_msg = format!("{}", e);
-            if error_msg.contains("url (") {
-                // Remove the URL part from the error message
-                let parts: Vec<&str> = error_msg.split(" for url (").collect();
-                if parts.len() > 1 {
-                    format!("Failed to make models request: {}", parts[0])
-                } else {
-                    format!("Failed to make models request: {}", error_msg)
-                }
-            } else {
-                format!("Failed to make models request: {}", error_msg)
-            }
-        })?;
+    {
+        Ok(res) => res,
+        Err(_) => return Ok(vec![]),
+    };
+
 
     // Check if the response is successful
     if !response.status().is_success() {
@@ -835,25 +826,22 @@ pub async fn fetch_prompts() -> Result<PluelyPromptsResponse, String> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/prompts", app_endpoint);
 
-    let response = client
+    let response = match client
         .post(&url)
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", api_access_key))
         .send()
         .await
-        .map_err(|e| {
-            let error_msg = format!("{}", e);
-            if error_msg.contains("url (") {
-                let parts: Vec<&str> = error_msg.split(" for url (").collect();
-                if parts.len() > 1 {
-                    format!("Failed to make prompts request: {}", parts[0])
-                } else {
-                    format!("Failed to make prompts request: {}", error_msg)
-                }
-            } else {
-                format!("Failed to make prompts request: {}", error_msg)
-            }
-        })?;
+    {
+        Ok(res) => res,
+        Err(_) => {
+            return Ok(PluelyPromptsResponse {
+                prompts: vec![],
+                total: 0,
+                last_updated: None,
+            });
+        }
+    };
 
     // Check if the response is successful
     if !response.status().is_success() {
