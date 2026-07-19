@@ -5,7 +5,6 @@ import {
   PopoverTrigger,
   PopoverContent,
   ScrollArea,
-  CostEstimator,
 } from "@/components";
 import {
   HeadphonesIcon,
@@ -65,7 +64,6 @@ export const SystemAudio = (props: useSystemAudioType) => {
     startContinuousRecording,
     ignoreContinuousRecording,
     isOfflineMode,
-    setIsOfflineMode,
     scrollAreaRef,
   } = props;
 
@@ -463,7 +461,6 @@ export const SystemAudio = (props: useSystemAudioType) => {
                       setUseSystemPrompt={setUseSystemPrompt}
                       contextContent={contextContent}
                       setContextContent={setContextContent}
-                      transcript={lastTranscription}
                     />
 
                     {/* Help/Keyboard Shortcuts */}

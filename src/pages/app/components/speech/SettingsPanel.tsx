@@ -12,7 +12,6 @@ import {
   SelectValue,
   SelectLabel,
   SelectGroup,
-  CostEstimator,
 } from "@/components";
 import { useTheme } from "@/contexts";
 import {
@@ -62,7 +61,6 @@ interface SettingsPanelProps {
   setUseSystemPrompt: (value: boolean) => void;
   contextContent: string;
   setContextContent: (content: string) => void;
-  transcript?: string;
 }
 
 export const SettingsPanel = ({
@@ -72,7 +70,6 @@ export const SettingsPanel = ({
   setUseSystemPrompt,
   contextContent,
   setContextContent,
-  transcript,
 }: SettingsPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -140,7 +137,6 @@ export const SettingsPanel = ({
             <SettingsIcon className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs font-medium">Settings</span>
           </div>
-          {transcript && <CostEstimator transcript={transcript} />}
         </div>
         <ChevronDownIcon
           className={cn(
@@ -243,6 +239,30 @@ export const SettingsPanel = ({
                 />
               </div>
             )}
+          </div>
+
+          {/* Appearance Section */}
+          <div className="space-y-3 pt-3 border-t border-border/50">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Appearance
+            </h4>
+            
+            <div className="space-y-2">
+              <Label className="text-xs font-medium flex items-center justify-between">
+                <span>Main Window Opacity</span>
+                <span className="text-muted-foreground font-normal">
+                  {transparency}%
+                </span>
+              </Label>
+              <Slider
+                value={[transparency]}
+                onValueChange={([value]) => onSetTransparency(value)}
+                min={10}
+                max={100}
+                step={1}
+                className="w-full"
+              />
+            </div>
           </div>
 
           {/* Context Section */}

@@ -6,7 +6,6 @@ import { useApp } from "@/contexts";
 import { fetchSTT, fetchAIResponse } from "@/lib/functions";
 import {
   DEFAULT_QUICK_ACTIONS,
-  DEFAULT_SYSTEM_PROMPT,
   MEETING_ASSISTANT_PROMPT,
   STORAGE_KEYS,
 } from "@/config";

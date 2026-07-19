@@ -1,4 +1,4 @@
-import { PERSONAS, Persona, DEFAULT_SYSTEM_PROMPT } from "@/config";
+import { PERSONAS, DEFAULT_SYSTEM_PROMPT } from "@/config";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { getByPath } from "./common.function";
 

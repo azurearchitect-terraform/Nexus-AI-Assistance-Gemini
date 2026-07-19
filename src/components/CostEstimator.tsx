@@ -43,19 +43,13 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ transcript }) => {
     const estimatedCostInr = estimatedCostUsd * 83.5;
 
     return (
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground px-2 py-1 bg-muted/50 rounded-md border border-border/50">
+        <div className="flex flex-col items-end justify-center text-[9px] text-muted-foreground px-1.5 py-0.5 rounded-sm bg-muted/20 border border-border/30 shadow-sm leading-tight">
             {error ? (
-                <span className="text-red-500">Cost error</span>
+                <span className="text-red-500">Error</span>
             ) : (
                 <>
-                    <div className="flex items-center gap-1">
-                        <span className="font-semibold">Tokens:</span>
-                        <span>{tokenCount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-emerald-600/90 dark:text-emerald-400/90">
-                        <span className="font-semibold">Cost:</span>
-                        <span>${estimatedCostUsd.toFixed(6)} (₹{estimatedCostInr.toFixed(4)})</span>
-                    </div>
+                    <span className="font-mono">{tokenCount.toLocaleString()} tk</span>
+                    <span className="font-mono text-emerald-600/90 dark:text-emerald-400/90">₹{estimatedCostInr.toFixed(4)}</span>
                 </>
             )}
         </div>
