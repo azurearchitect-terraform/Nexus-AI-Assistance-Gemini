@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useWindowResize, useGlobalShortcuts } from ".";
+import { useWindowResize, useGlobalShortcuts, useWebSpeechAPI } from ".";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/contexts";
@@ -71,6 +71,8 @@ export function useSystemAudio() {
   const globalShortcuts = useGlobalShortcuts();
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const webSpeech = useWebSpeechAPI();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
   const [lastTranscription, setLastTranscription] = useState<string>("");
@@ -295,7 +297,17 @@ export function useSystemAudio() {
               }
             } catch (sttError: any) {
               console.error("STT Error:", sttError);
-              setError(sttError.message || "Failed to transcribe audio");
+              const errMsg = sttError.message || "Failed to transcribe audio";
+              setError(`${errMsg} - Falling back to Offline Mode`);
+              
+              // Phase 5: Automatic failover to Web Speech API
+              setIsOfflineMode(true);
+              // We need to stop the Rust backend capture first
+              try {
+                await invoke("stop_capture");
+              } catch (e) {}
+              // Then WebSpeech will be started by the user or we can start it directly if they press the button again.
+            } finally {
               setIsPopoverOpen(true);
             }
           } catch (err) {
@@ -704,26 +716,33 @@ export function useSystemAudio() {
     lastAIResponse,
     error,
     resizeWindow,
-  ]);
-
   useEffect(() => {
     globalShortcuts.registerSystemAudioCallback(async () => {
       if (capturing) {
-        await stopCapture();
+        if (isOfflineMode) {
+          webSpeech.stopListening();
+          setCapturing(false);
+        } else {
+          await stopCapture();
+        }
       } else {
         await startCapture();
       }
     });
-  }, [startCapture, stopCapture]);
+  }, [startCapture, stopCapture, isOfflineMode, capturing]);
 
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      invoke("stop_system_audio_capture").catch(() => {});
+      if (isOfflineMode) {
+        webSpeech.stopListening();
+      } else {
+        invoke("stop_system_audio_capture").catch(() => {});
+      }
     };
-  }, []);
+  }, [isOfflineMode]);
 
   // Debounced save to prevent race conditions and improve performance
   useEffect(() => {
@@ -964,6 +983,8 @@ export function useSystemAudio() {
     manualStopAndSend,
     startContinuousRecording,
     ignoreContinuousRecording,
+    isOfflineMode,
+    setIsOfflineMode,
     // Scroll area ref for keyboard navigation
     scrollAreaRef,
   };

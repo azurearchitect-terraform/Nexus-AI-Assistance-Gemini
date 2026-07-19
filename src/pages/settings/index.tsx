@@ -3,6 +3,7 @@ import {
   AlwaysOnTopToggle,
   AppIconToggle,
   AutostartToggle,
+  KnowledgeBase,
 } from "./components";
 import { PageLayout } from "@/layouts";
 import { PrivacyToggle } from "@/components";
@@ -24,6 +25,9 @@ const Settings = () => {
 
       {/* Screen Share Protection */}
       <PrivacyToggle />
+      
+      {/* Knowledge Base */}
+      <KnowledgeBase />
     </PageLayout>
   );
 };

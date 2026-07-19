@@ -55,6 +55,7 @@ tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
 url = "2.5"
 rusqlite = { version = "0.31", features = ["bundled"] }
 tiktoken = "3.5.1"
+chrono = "0.4.45"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-macos-permissions = "2"

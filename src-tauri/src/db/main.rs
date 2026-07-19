@@ -24,5 +24,12 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("migrations/meeting-assistant.sql"),
             kind: MigrationKind::Up,
         },
+        // Migration 4: Create RAG / Knowledge Base FTS5 tables
+        Migration {
+            version: 4,
+            description: "create_rag_tables",
+            sql: include_str!("migrations/rag.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

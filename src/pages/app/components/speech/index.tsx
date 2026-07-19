@@ -23,6 +23,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { RecordingPanel } from "./RecordingPanel";
+import { fetchAIResponse } from "@/lib/functions";
 import { ResultsSection } from "./ResultsSection";
 import { SettingsPanel } from "./SettingsPanel";
 import { PermissionFlow } from "./PermissionFlow";
@@ -66,12 +67,16 @@ export const SystemAudio = (props: useSystemAudioType) => {
     recordingProgress,
     manualStopAndSend,
     startContinuousRecording,
+    startContinuousRecording,
     ignoreContinuousRecording,
+    isOfflineMode,
+    setIsOfflineMode,
     scrollAreaRef,
   } = props;
 
-  const { hasActiveLicense, supportsImages } = useApp();
+  const { hasActiveLicense, supportsImages, selectedAIProvider, allAiProviders } = useApp();
   const { activeTrigger, triggers } = useKeywordScanner(lastTranscription);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   // View mode toggle
   const [conversationMode, setConversationMode] = useState(false);
@@ -111,6 +116,44 @@ export const SystemAudio = (props: useSystemAudioType) => {
       await stopCapture();
     } else {
       await startCapture();
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    if (conversation.messages.length === 0) return;
+    setIsSummarizing(true);
+    try {
+      const fullTranscript = conversation.messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content)
+        .join("\n");
+      
+      let summaryText = "";
+      
+      const provider = allAiProviders.find(p => p.id === selectedAIProvider?.aiProviderId);
+      
+      const stream = fetchAIResponse({
+        systemPrompt: "Summarize the following meeting transcript into key points and action items. Use markdown.",
+        userMessage: fullTranscript,
+        imagesBase64: [],
+        selectedProvider: selectedAIProvider,
+        provider,
+        history: [],
+      });
+
+      for await (const chunk of stream) {
+        summaryText += chunk;
+      }
+
+      await invoke("export_summary", { 
+        summary: summaryText, 
+        title: conversation.title || "Meeting_Summary" 
+      });
+      
+    } catch (err) {
+      console.error("Summarization failed:", err);
+    } finally {
+      setIsSummarizing(false);
     }
   };
 
@@ -165,6 +208,8 @@ export const SystemAudio = (props: useSystemAudioType) => {
     if (error && !setupRequired)
       return <AlertCircleIcon className="text-red-500" />;
     if (isProcessing) return <LoaderIcon className="animate-spin" />;
+    if (capturing && isOfflineMode)
+      return <AlertCircleIcon className="text-yellow-500 animate-pulse" />;
     if (capturing)
       return <AudioLinesIcon className="text-green-500 animate-pulse" />;
     return <HeadphonesIcon />;
@@ -221,15 +266,33 @@ export const SystemAudio = (props: useSystemAudioType) => {
               <div className="flex items-center justify-between gap-2">
                 {/* Mode Switcher */}
                 {!setupRequired && (
-                  <ModeSwitcher
-                    isVadMode={isVadMode}
-                    onModeChange={handleModeChange}
-                    disabled={
-                      isRecordingInContinuousMode ||
-                      isProcessing ||
-                      isAIProcessing
-                    }
-                  />
+                  <div className="flex items-center gap-2">
+                    <ModeSwitcher
+                      isVadMode={isVadMode}
+                      onModeChange={handleModeChange}
+                      disabled={
+                        isRecordingInContinuousMode ||
+                        isProcessing ||
+                        isAIProcessing
+                      }
+                    />
+                    {isOfflineMode && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center justify-center h-8 w-8 rounded-md bg-yellow-50 text-yellow-600 border border-yellow-200">
+                              <AlertCircleIcon className="w-4 h-4" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p className="text-xs">
+                              Offline Fallback Active (Web Speech API)
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                 )}
                 {setupRequired && (
                   <h2 className="font-semibold text-sm">Setup Required</h2>
@@ -237,6 +300,24 @@ export const SystemAudio = (props: useSystemAudioType) => {
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Generate Summary Button */}
+                  {conversation.messages.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleGenerateSummary}
+                      disabled={isSummarizing || capturing}
+                      className="h-6 text-[10px] gap-1 px-2 border-primary/50 text-primary"
+                      title="Generate and Export Summary"
+                    >
+                      {isSummarizing ? (
+                        <LoaderIcon className="w-3 h-3 animate-spin" />
+                      ) : (
+                        "Export Summary"
+                      )}
+                    </Button>
+                  )}
+                  
                   {/* Screenshot Button */}
                   {hasActiveLicense && !setupRequired && supportsImages && (
                     <Button

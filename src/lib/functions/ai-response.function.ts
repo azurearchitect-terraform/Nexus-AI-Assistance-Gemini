@@ -189,7 +189,21 @@ export async function* fetchAIResponse(params: {
       return;
     }
 
-    const enhancedSystemPrompt = buildEnhancedSystemPrompt(systemPrompt);
+    let enhancedSystemPrompt = buildEnhancedSystemPrompt(systemPrompt);
+
+    // [RAG / Memory Context Injection]
+    try {
+      const memoryResults: any[] = await invoke("search_memory", { query: userMessage });
+      if (memoryResults && memoryResults.length > 0) {
+        let memoryContext = "\n\n=== RELEVANT CONTEXT (Knowledge Base & Past Meetings) ===\n";
+        memoryResults.forEach((mem) => {
+          memoryContext += `[${mem.title}]: ${mem.content}\n\n`;
+        });
+        enhancedSystemPrompt += memoryContext;
+      }
+    } catch (e) {
+      console.error("Failed to fetch memory context", e);
+    }
 
     // Check if we should use Pluely API instead
     const usePluelyAPI = await shouldUsePluelyAPI();

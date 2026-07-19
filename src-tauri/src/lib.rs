@@ -7,6 +7,8 @@ mod shortcuts;
 mod window;
 mod meeting;
 mod cost;
+mod export;
+mod rag;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tokio::task::JoinHandle;
@@ -133,6 +135,11 @@ pub fn run() {
             meeting::stop_meeting,
             meeting::trigger_summary,
             cost::estimate_openai_cost,
+            export::export_summary,
+            rag::upload_document,
+            rag::get_documents,
+            rag::delete_document,
+            rag::search_memory,
         ])
         .setup(|app| {
             // Setup main window positioning
