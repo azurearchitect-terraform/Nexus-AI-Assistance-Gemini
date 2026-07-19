@@ -67,7 +67,6 @@ export const SystemAudio = (props: useSystemAudioType) => {
     recordingProgress,
     manualStopAndSend,
     startContinuousRecording,
-    startContinuousRecording,
     ignoreContinuousRecording,
     isOfflineMode,
     setIsOfflineMode,
