@@ -459,7 +459,7 @@ fn samples_to_wav_b64(sample_rate: u32, mono_f32: &[f32]) -> Result<String, Stri
 }
 
 #[tauri::command]
-pub async fn stop_system_audio_capture(app: AppHandle) -> Result<(), String> {
+pub async fn stop_system_audio_capture<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     let state = app.state::<crate::AudioState>();
 
     // Abort task in separate scope (Send trait fix)

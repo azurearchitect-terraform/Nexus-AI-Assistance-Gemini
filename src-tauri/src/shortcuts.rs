@@ -288,7 +288,7 @@ pub fn handle_stealth_panic<R: Runtime>(app: &AppHandle<R>) {
         }
         
         // Stop the rust-side audio capture
-        let _ = crate::speaker::stop_system_audio_capture(app_clone).await;
+        let _ = crate::speaker::stop_system_audio_capture(app_clone.app_handle().clone()).await;
     });
 }
 
