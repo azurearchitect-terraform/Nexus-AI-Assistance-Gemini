@@ -716,6 +716,8 @@ export function useSystemAudio() {
     lastAIResponse,
     error,
     resizeWindow,
+  ]);
+
   useEffect(() => {
     globalShortcuts.registerSystemAudioCallback(async () => {
       if (capturing) {
