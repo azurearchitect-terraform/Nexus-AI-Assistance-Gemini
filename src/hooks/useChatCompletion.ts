@@ -227,7 +227,7 @@ export const useChatCompletion = (
 
         try {
           // Dynamically route the prompt
-          const routedPrompt = await routePrompt(input, selectedAIProvider.apiKey || "");
+          const routedPrompt = await routePrompt(input, selectedAIProvider.variables?.apiKey || "");
 
           // Use the fetchAIResponse function with signal
           for await (const chunk of fetchAIResponse({

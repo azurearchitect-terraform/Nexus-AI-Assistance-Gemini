@@ -5,10 +5,6 @@ import {
   PopoverTrigger,
   PopoverContent,
   ScrollArea,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   CostEstimator,
 } from "@/components";
 import {
@@ -129,7 +125,7 @@ export const SystemAudio = (props: useSystemAudioType) => {
       
       let summaryText = "";
       
-      const provider = allAiProviders.find(p => p.id === selectedAIProvider?.aiProviderId);
+      const provider = allAiProviders.find(p => p.id === selectedAIProvider?.provider);
       
       const stream = fetchAIResponse({
         systemPrompt: "Summarize the following meeting transcript into key points and action items. Use markdown.",
@@ -276,20 +272,12 @@ export const SystemAudio = (props: useSystemAudioType) => {
                       }
                     />
                     {isOfflineMode && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center justify-center h-8 w-8 rounded-md bg-yellow-50 text-yellow-600 border border-yellow-200">
-                              <AlertCircleIcon className="w-4 h-4" />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">
-                            <p className="text-xs">
-                              Offline Fallback Active (Web Speech API)
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <div 
+                        className="flex items-center justify-center h-8 w-8 rounded-md bg-yellow-50 text-yellow-600 border border-yellow-200"
+                        title="Offline Fallback Active (Web Speech API)"
+                      >
+                        <AlertCircleIcon className="w-4 h-4" />
+                      </div>
                     )}
                   </div>
                 )}
