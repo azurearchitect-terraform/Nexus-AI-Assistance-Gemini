@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  audienceBrief, audiencesToApply, buildAudiencePrompt, extractJdSignals,
+  audienceBrief, audiencesToApply, buildAudiencePrompt, describeAppliedAudiences, extractJdSignals, selectionMatchesDecision,
   fuseAudienceDecision, jdFingerprint, scoreAudiencesByRules,
 } from "./audienceIntelligence";
 
@@ -169,4 +169,25 @@ test("automatic application caps cost at two close confident readers and exclude
   decision.audiences[0].confidence = 0.9;
   decision.audiences[1].confidence = 0.75;
   assert.deepEqual(audiencesToApply(decision), ["cloud-architect", "microsoft"]);
+});
+
+test("AI badge requires the current complete automatic selection and no manual changes", () => {
+  const decision = fuseAudienceDecision(null, scoreAudiencesByRules(extractJdSignals(manager)), manager);
+  const selection = audiencesToApply(decision);
+  assert.ok(selectionMatchesDecision(decision, [...selection].reverse(), decision.fingerprint, false));
+  assert.equal(selectionMatchesDecision(decision, selection, decision.fingerprint, true), false);
+  assert.equal(selectionMatchesDecision(decision, selection, "different-jd", false), false);
+  assert.equal(selectionMatchesDecision(decision, [...selection, "general"], decision.fingerprint, false), false);
+  assert.equal(selectionMatchesDecision(decision, selection.slice(1), decision.fingerprint, false), false);
+  assert.equal(selectionMatchesDecision(null, selection, decision.fingerprint, false), false);
+});
+
+test("explicit Auto-Select success describes only applied readers and rules fallback", () => {
+  const jd = "Principal Cloud Architect\nDesign Azure cloud architecture. Individual contributor, no direct reports.";
+  const decision = fuseAudienceDecision(null, scoreAudiencesByRules(extractJdSignals(jd)), jd);
+  assert.equal(describeAppliedAudiences(decision),
+    "Selected: Principal Cloud Architect (90%) + Cloud Architect (80%) (rules fallback)");
+  decision.source = "ai+rules";
+  assert.equal(describeAppliedAudiences(decision),
+    "Selected: Principal Cloud Architect (90%) + Cloud Architect (80%)");
 });

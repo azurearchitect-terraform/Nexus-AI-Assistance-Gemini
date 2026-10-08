@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useDeferredValue, Suspense, lazy } from 'react';
+import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   FileText, 
@@ -65,8 +66,7 @@ import { ResumeHealthScore } from './components/ResumeHealthScore';
 import { BulletRulesSettings } from './components/BulletRulesSettings';
 import { BulletBudgetReportCard } from './components/BulletBudgetReportCard';
 import { LinkedInTrendsCard } from './components/LinkedInTrendsCard';
-import { AudienceIntelligencePanel } from './components/AudienceIntelligencePanel';
-import { audienceBrief, audiencesToApply, jdFingerprint, type AudienceDecision } from './lib/audienceIntelligence';
+import { audienceBrief, audiencesToApply, describeAppliedAudiences, jdFingerprint, selectionMatchesDecision, type AudienceDecision } from './lib/audienceIntelligence';
 import { MODE_DESCRIPTIONS, AUDIENCES, MODEL_PRICING, TARGET_COMPANIES, BACKGROUND_THEMES } from './constants';
 import { downloadDOCX, downloadJSON } from './services/exportService';
 import { canonicalResume, exportBlocks, assertUnmaskedExport, atsSafePDFStyle, resumeFileName, sanitizedMetadata } from './lib/atsDocument';
@@ -494,6 +494,17 @@ export default function App() {
   }, [autoAudienceEnabled]);
   const [customAudience, setCustomAudience] = useState('');
   const [isAudienceDropdownOpen, setIsAudienceDropdownOpen] = useState(false);
+  const [isAudienceDetailsOpen, setIsAudienceDetailsOpen] = useState(false);
+  const [audiencePopoverPosition, setAudiencePopoverPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 0 });
+  const audienceControlRef = useRef<HTMLDivElement>(null);
+  const audienceCaretRef = useRef<HTMLButtonElement>(null);
+  const audiencePopoverRef = useRef<HTMLDivElement>(null);
+  const currentAudienceFingerprint = useMemo(() => jdFingerprint(jobDescription, targetRole), [jobDescription, targetRole]);
+  const currentAudienceDecision = audienceDecision?.fingerprint === currentAudienceFingerprint ? audienceDecision : null;
+  const isAutomaticAudienceSelection = selectionMatchesDecision(
+    currentAudienceDecision, selectedAudiences, currentAudienceFingerprint,
+    manualAudienceFingerprint.current === currentAudienceFingerprint,
+  );
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const companyDropdownRef = useRef<HTMLDivElement>(null);
   const audienceDropdownRef = useRef<HTMLDivElement>(null);
@@ -1066,6 +1077,48 @@ export default function App() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isAudienceDropdownOpen]);
+  useEffect(() => {
+    if (!isAudienceDetailsOpen) return;
+    const reposition = () => {
+      const anchor = audienceControlRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(320, window.innerWidth - 16);
+      const top = Math.min(anchor.bottom + 6, window.innerHeight - 8);
+      setAudiencePopoverPosition({
+        top, left: Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)), width,
+        maxHeight: Math.max(0, Math.min(window.innerHeight * 0.6, window.innerHeight - top - 8)),
+      });
+    };
+    const close = () => {
+      setIsAudienceDetailsOpen(false);
+      audienceCaretRef.current?.focus({ preventScroll: true });
+    };
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !audienceControlRef.current?.contains(event.target) &&
+        !audiencePopoverRef.current?.contains(event.target)) {
+        close();
+        requestAnimationFrame(() => audienceCaretRef.current?.focus({ preventScroll: true }));
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+      }
+    };
+    reposition();
+    audiencePopoverRef.current?.focus({ preventScroll: true });
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [isAudienceDetailsOpen]);
   const { state: formattingState, dispatch: formattingDispatch } = useFormatting();
   const { activeSection, styles: sectionStyles } = formattingState;
   const { 
@@ -2089,8 +2142,8 @@ export default function App() {
     navigate('/build');
   };
 
-  const handleAutoSelectAudiences = async (force = true, autoApply = true) => {
-    if (!jobDescription) return;
+  const handleAutoSelectAudiences = async (force = true, autoApply = true, explicit = false) => {
+    if (!jobDescription.trim()) return;
     const request = ++audienceRequest.current;
     const fingerprint = jdFingerprint(jobDescription, targetRole);
     setIsAutoSelectingAudiences(true);
@@ -2099,8 +2152,10 @@ export default function App() {
       if (request !== audienceRequest.current ||
         fingerprint !== jdFingerprint(audienceInputs.current.jobDescription, audienceInputs.current.targetRole)) return;
       setAudienceDecision(decision);
-      if (autoApply && manualAudienceFingerprint.current !== fingerprint) {
+      if (autoApply && (explicit || manualAudienceFingerprint.current !== fingerprint)) {
+        if (explicit) manualAudienceFingerprint.current = null;
         setSelectedAudiences(audiencesToApply(decision));
+        if (explicit) showToast(describeAppliedAudiences(decision), 'success');
       }
     } catch (e) {
       console.error(e);
@@ -3472,21 +3527,116 @@ export default function App() {
                               </div>
                             )}
                             <div className="relative" ref={audienceDropdownRef}>
-                              <div className="flex items-center justify-between mb-2">
-                                <label className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-white/70' : 'text-slate-800'}`}>Target Audiences (Multi-select)</label>
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAutoSelectAudiences();
-                                  }}
-                                  disabled={isAutoSelectingAudiences}
-                                  className="py-1 px-2 text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-                                >
-                                  {isAutoSelectingAudiences ? 'Selecting...' : 'Auto-Select'}
-                                </button>
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <label className={`text-xs font-bold uppercase tracking-wide ${isDarkMode ? 'text-white/70' : 'text-slate-800'}`}>Target Audiences (Multi-select)</label>
+                                <div ref={audienceControlRef} className="flex shrink-0 rounded bg-emerald-500/10">
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleAutoSelectAudiences(true, true, true)}
+                                    disabled={isAutoSelectingAudiences || !jobDescription.trim()}
+                                    title={!jobDescription.trim() ? 'Paste a job description to use Auto-Select.' : 'Re-analyze the JD and apply the best audiences.'}
+                                    className={`flex items-center gap-1 py-1 px-2 text-xs font-semibold rounded-l hover:bg-emerald-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}
+                                  >
+                                    {isAutoSelectingAudiences && <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                                    {isAutoSelectingAudiences ? 'Analyzing…' : 'Auto-Select'}
+                                  </button>
+                                  <button
+                                    ref={audienceCaretRef}
+                                    type="button"
+                                    aria-label="Auto-Select details"
+                                    aria-expanded={isAudienceDetailsOpen}
+                                    aria-controls="audience-auto-select-details"
+                                    onClick={() => {
+                                      setIsAudienceDropdownOpen(false);
+                                      setIsAudienceDetailsOpen(open => !open);
+                                    }}
+                                    className={`px-1 border-l border-emerald-500/20 rounded-r hover:bg-emerald-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}
+                                  >
+                                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                                  </button>
+                                </div>
                               </div>
+                              {isAudienceDetailsOpen && createPortal(
+                                <div
+                                  id="audience-auto-select-details"
+                                  ref={audiencePopoverRef}
+                                  role="dialog"
+                                  aria-label="Auto-Select details"
+                                  tabIndex={-1}
+                                  style={audiencePopoverPosition}
+                                  className={`fixed z-50 overflow-y-auto rounded-xl border p-3 text-xs shadow-xl space-y-3 ${isDarkMode ? 'bg-neutral-950 border-white/20 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                >
+                                  {currentAudienceDecision ? (
+                                    <>
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <span className={`rounded px-2 py-1 font-semibold ${isDarkMode ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-800'}`}>
+                                          {currentAudienceDecision.source === 'rules' ? 'Rules fallback' : 'AI'}
+                                        </span>
+                                        {[currentAudienceDecision.signals.seniority.value, currentAudienceDecision.signals.peopleManagement.value,
+                                          ...currentAudienceDecision.signals.platforms, currentAudienceDecision.signals.orgScale.value]
+                                          .filter(value => value !== 'not stated').slice(0, 4).map(value => (
+                                            <span key={value} className={`rounded px-2 py-1 ${isDarkMode ? 'bg-white/10' : 'bg-slate-100'}`}>{value}</span>
+                                          ))}
+                                      </div>
+                                      <ol className="space-y-2">
+                                        {currentAudienceDecision.audiences.map(pick => (
+                                          <li key={pick.id}>
+                                            <div className="flex items-center gap-2" title={pick.reason}>
+                                              <span className="min-w-0 flex-1 font-semibold">{pick.label}</span>
+                                              <span>{Math.round(pick.confidence * 100)}%</span>
+                                              <button type="button" disabled={selectedAudiences.includes(pick.id)}
+                                                onClick={() => {
+                                                  manualAudienceFingerprint.current = currentAudienceFingerprint;
+                                                  setSelectedAudiences(selected => selected.includes(pick.id) ? selected : [...selected, pick.id]);
+                                                }}
+                                                className="rounded border px-2 py-1 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500">
+                                                {selectedAudiences.includes(pick.id) ? 'Selected' : 'Add'}
+                                              </button>
+                                            </div>
+                                            {pick.evidence.length > 0 && (
+                                              <details className="mt-1">
+                                                <summary className="cursor-pointer">JD evidence</summary>
+                                                {pick.evidence.map((quote, index) => (
+                                                  <blockquote key={index} className="mt-1 border-l-2 border-emerald-500 pl-2 break-words">{quote}</blockquote>
+                                                ))}
+                                              </details>
+                                            )}
+                                          </li>
+                                        ))}
+                                      </ol>
+                                      {currentAudienceDecision.customPersona && (
+                                        <button type="button" className="text-left underline break-words focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500"
+                                          onClick={() => {
+                                            manualAudienceFingerprint.current = currentAudienceFingerprint;
+                                            setCustomAudience(currentAudienceDecision.customPersona!);
+                                            setSelectedAudiences(['custom']);
+                                          }}>
+                                          Use as custom persona: {currentAudienceDecision.customPersona}
+                                        </button>
+                                      )}
+                                      {currentAudienceDecision.warnings.length > 0 && (
+                                        <p className={`truncate ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`} title={currentAudienceDecision.warnings.join(' ')}>
+                                          {currentAudienceDecision.warnings[0]}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : <p>Paste a job description, then click Auto-Select.</p>}
+                                  <div className={`border-t pt-2 space-y-2 ${isDarkMode ? 'border-white/15' : 'border-slate-200'}`}>
+                                    <label className="flex items-start gap-2">
+                                      <input type="checkbox" checked={autoAudienceEnabled}
+                                        onChange={() => setAutoAudienceEnabled(enabled => !enabled)} />
+                                      Auto-select when the JD changes
+                                    </label>
+                                    <p>Each selected audience creates its own resume version.</p>
+                                  </div>
+                                </div>,
+                                document.body,
+                              )}
                               <button
-                                onClick={() => setIsAudienceDropdownOpen(!isAudienceDropdownOpen)}
+                                onClick={() => {
+                                  setIsAudienceDetailsOpen(false);
+                                  setIsAudienceDropdownOpen(!isAudienceDropdownOpen);
+                                }}
                                 className={`w-full px-3 py-2 text-xs border rounded-lg flex items-center justify-between transition-all ${
                                   isDarkMode ? 'bg-black text-white border-white/10' : 'bg-white text-black border-black/10'
                                 }`}
@@ -3495,7 +3645,9 @@ export default function App() {
                                   {selectedAudiences.length > 0
                                     ? (
                                       <>
-                                        <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Auto</span>
+                                        {isAutomaticAudienceSelection && (
+                                          <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>AI</span>
+                                        )}
                                         {selectedAudiences.map(id => id === 'custom' ? (customAudience || 'Custom Persona') : (AUDIENCES.find(a => a.id === id)?.label || id)).join(', ')}
                                       </>
                                     )
@@ -3563,29 +3715,6 @@ export default function App() {
                                   />
                                 </motion.div>
                               )}
-                              <AudienceIntelligencePanel
-                                decision={audienceDecision}
-                                enabled={autoAudienceEnabled}
-                                loading={isAutoSelectingAudiences}
-                                isDarkMode={isDarkMode}
-                                selectedAudiences={selectedAudiences}
-                                onToggle={() => setAutoAudienceEnabled((enabled) => !enabled)}
-                                onAnalyze={() => void handleAutoSelectAudiences(true, false)}
-                                onApply={() => {
-                                  if (!audienceDecision) return;
-                                  manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
-                                  setSelectedAudiences(audiencesToApply(audienceDecision));
-                                }}
-                                onSuggestion={(id) => {
-                                  manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
-                                  setSelectedAudiences((selected) => selected.includes(id) ? selected : [...selected, id]);
-                                }}
-                                onCustom={(persona) => {
-                                  manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
-                                  setCustomAudience(persona);
-                                  setSelectedAudiences(['custom']);
-                                }}
-                              />
                             </div>
                             
                             <div>

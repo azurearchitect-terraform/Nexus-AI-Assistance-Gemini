@@ -283,3 +283,19 @@ export function audiencesToApply(decision: AudienceDecision): string[] {
     pick.confidence >= 0.75 && primary.confidence - pick.confidence <= 0.15 + Number.EPSILON);
   return secondary ? [primary.id, secondary.id] : [primary.id];
 }
+
+export function selectionMatchesDecision(
+  decision: AudienceDecision | null, selection: string[], fingerprint: string, manuallyChanged: boolean,
+): boolean {
+  if (!decision || decision.fingerprint !== fingerprint || manuallyChanged) return false;
+  const expected = audiencesToApply(decision);
+  return selection.length === expected.length && expected.every(id => selection.includes(id));
+}
+
+export function describeAppliedAudiences(decision: AudienceDecision): string {
+  const selected = audiencesToApply(decision).map(id => {
+    const pick = decision.audiences.find(item => item.id === id);
+    return pick ? `${pick.label} (${Math.round(pick.confidence * 100)}%)` : id;
+  });
+  return `Selected: ${selected.join(" + ")}${decision.source === "rules" ? " (rules fallback)" : ""}`;
+}
