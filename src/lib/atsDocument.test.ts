@@ -1,0 +1,78 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { AtsResume } from "../components/AtsResume";
+import { assertUnmaskedExport, canonicalResume, exportBlocks, formatDurationForAts, resumeFileName } from "./atsDocument";
+import type { ResumeData } from "../types";
+
+const source: ResumeData = {
+  personal_info: { name: "Taylor Example", email: "taylor@example.org", phone: "+44 20 7946 0958", location: "London",
+    linkedin: "linkedin.com/in/taylor-example", summary: "Configured efficient workflows and firewalls." },
+  skills: ["Azure", "TypeScript"],
+  experience: [{ id: "1", role: "Engineer", company: "Example Services", duration: "05/2019 - 08/2021", bullets: ["Defined reliable workflows."] }],
+  projects: [{ title: "Migration", description: "Configured infrastructure.", isOptional: true }],
+  certifications: ["Azure Fundamentals"],
+  education: [{ degree: "BSc", institution: "Example University", expected_completion: "2018" }],
+};
+
+test("canonical content uses profile overrides without cloning content arrays or mutating the source", () => {
+  const resume = canonicalResume(source, { name: "Jordan Candidate", email: "" });
+  assert.equal(resume.personal_info.name, "Jordan Candidate");
+  assert.equal(resume.personal_info.email, source.personal_info.email);
+  assert.equal(resume.personal_info.linkedin, "https://linkedin.com/in/taylor-example");
+  assert.equal(source.personal_info.name, "Taylor Example");
+  assert.equal(resume.experience, source.experience);
+  assert.equal(resume.skills, source.skills);
+  assert.equal(resume.summary, source.personal_info.summary);
+  assert.equal("_intermediateData" in resume, false);
+});
+
+test("blocks and preview preserve body contacts, full hyperlink, standard headings and dates", () => {
+  const resume = canonicalResume(source);
+  const blocks = exportBlocks(resume);
+  assert.deepEqual(blocks.filter(block => block.kind === "heading").map(block => block.text),
+    ["Professional Summary", "Skills", "Work Experience", "Projects", "Certifications", "Education"]);
+  assert.equal(blocks.find(block => block.kind === "contact")?.text,
+    "London | taylor@example.org | +44 20 7946 0958 | https://linkedin.com/in/taylor-example");
+  assert.ok(blocks.some(block => block.text === "Engineer | Example Services | May 2019 - Aug 2021"));
+  const html = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }));
+  assert.ok(html.includes('href="https://linkedin.com/in/taylor-example"'));
+  assert.ok(html.includes("<li"));
+  assert.ok(!/<(?:table|header|footer|img)\b/.test(html));
+  for (const block of blocks) assert.ok(html.includes(block.text) || block.kind === "contact");
+  const masked = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: true }));
+  assert.ok(!masked.includes("taylor@example.org"));
+  assert.ok(!masked.includes("Taylor Example"));
+  assert.throws(() => assertUnmaskedExport(true, blocks), /PII masking/);
+  assert.throws(() => assertUnmaskedExport(false, [{ kind: "contact", section: "header", text: "[REDACTED EMAIL]" }]), /PII masking/);
+});
+
+test("empty contact fields and sections do not create dangling separators or invented content", () => {
+  const resume = canonicalResume({ ...source, personal_info: { ...source.personal_info, location: "", phone: "", linkedin: "", summary: "" },
+    skills: [], experience: [], projects: [], certifications: [], education: [] });
+  assert.deepEqual(exportBlocks(resume).map(block => block.text), ["Taylor Example", "taylor@example.org"]);
+});
+
+test("missing generated contact values remain empty strings for source checks", () => {
+  const incomplete = canonicalResume({ ...source, personal_info: {} } as ResumeData);
+  assert.deepEqual(incomplete.personal_info, { name: "", email: "", phone: "", location: "", linkedin: "" });
+  assert.equal(incomplete.summary, "");
+});
+
+test("ATS durations normalize known months while preserving year-only and unknown dates", () => {
+  const cases: [string, string][] = [
+    ["2016-2019", "2016 - 2019"], ["2016 - Present", "2016 - Present"],
+    ["2016 (contract) - 2019", "2016 - 2019"], ["2016 - Aug 2019", "2016 - Aug 2019"],
+    ["05/2019 - 08/2021", "May 2019 - Aug 2021"], ["2019-05 - 2021-08", "May 2019 - Aug 2021"],
+    ["Jan-2024 - Feb-2024", "Jan 2024 - Feb 2024"], ["Jan '24 - Mar '24", "Jan 2024 - Mar 2024"],
+    ["Jan 2020 to date", "Jan 2020 - Present"], ["Freelance", "Freelance"], ["2024 - 2020", "2024 - 2020"],
+  ];
+  for (const [input, expected] of cases) assert.equal(formatDurationForAts(input), expected, input);
+});
+
+test("filenames use the real candidate name and sanitize unsafe filename characters", () => {
+  const resume = canonicalResume(source, { name: "Jordan: Candidate" });
+  assert.equal(resumeFileName(resume, "Engineer/Lead", "docx"), "Jordan Candidate-EngineerLead.docx");
+  assert.equal(resumeFileName(resume, "", "pdf"), "Jordan Candidate-Resume.pdf");
+});
