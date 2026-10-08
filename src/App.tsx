@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useDeferredValue, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useDeferredValue, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
@@ -499,6 +499,7 @@ export default function App() {
   const audienceControlRef = useRef<HTMLDivElement>(null);
   const audienceCaretRef = useRef<HTMLButtonElement>(null);
   const audiencePopoverRef = useRef<HTMLDivElement>(null);
+  const audienceFieldRef = useRef<HTMLButtonElement>(null);
   const currentAudienceFingerprint = useMemo(() => jdFingerprint(jobDescription, targetRole), [jobDescription, targetRole]);
   const currentAudienceDecision = audienceDecision?.fingerprint === currentAudienceFingerprint ? audienceDecision : null;
   const isAutomaticAudienceSelection = selectionMatchesDecision(
@@ -1077,7 +1078,7 @@ export default function App() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isAudienceDropdownOpen]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isAudienceDetailsOpen) return;
     const reposition = () => {
       const anchor = audienceControlRef.current?.getBoundingClientRect();
@@ -1089,32 +1090,50 @@ export default function App() {
         maxHeight: Math.max(0, Math.min(window.innerHeight * 0.6, window.innerHeight - top - 8)),
       });
     };
-    const close = () => {
-      setIsAudienceDetailsOpen(false);
-      audienceCaretRef.current?.focus({ preventScroll: true });
-    };
+    const popover = audiencePopoverRef.current;
+    const isInside = (node: unknown) => node instanceof Node &&
+      (!!audienceControlRef.current?.contains(node) || !!popover?.contains(node));
+    // Outside clicks only close; moving focus here would steal it from the clicked control.
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !audienceControlRef.current?.contains(event.target) &&
-        !audiencePopoverRef.current?.contains(event.target)) {
-        close();
-        requestAnimationFrame(() => audienceCaretRef.current?.focus({ preventScroll: true }));
-      }
+      if (!isInside(event.target)) setIsAudienceDetailsOpen(false);
     };
-    const escape = (event: KeyboardEvent) => {
+    const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        close();
+        setIsAudienceDetailsOpen(false);
+        audienceCaretRef.current?.focus({ preventScroll: true });
+        return;
+      }
+      if (event.key !== 'Tab' || !popover?.contains(document.activeElement)) return;
+      const focusable = Array.from(popover.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), summary, a[href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter(el => el.offsetParent !== null);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === popover || !first)) {
+        event.preventDefault();
+        audienceCaretRef.current?.focus({ preventScroll: true });
+      } else if (!event.shiftKey && (active === last || !last)) {
+        event.preventDefault();
+        setIsAudienceDetailsOpen(false);
+        audienceFieldRef.current?.focus({ preventScroll: true });
       }
     };
+    const focusout = (event: FocusEvent) => {
+      if (event.relatedTarget && !isInside(event.relatedTarget)) setIsAudienceDetailsOpen(false);
+    };
     reposition();
-    audiencePopoverRef.current?.focus({ preventScroll: true });
+    popover?.focus({ preventScroll: true });
     document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', escape);
+    document.addEventListener('keydown', keydown);
+    popover?.addEventListener('focusout', focusout);
     window.addEventListener('resize', reposition);
     window.addEventListener('scroll', reposition, true);
     return () => {
       document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', escape);
+      document.removeEventListener('keydown', keydown);
+      popover?.removeEventListener('focusout', focusout);
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition, true);
     };
@@ -3633,6 +3652,7 @@ export default function App() {
                                 document.body,
                               )}
                               <button
+                                ref={audienceFieldRef}
                                 onClick={() => {
                                   setIsAudienceDetailsOpen(false);
                                   setIsAudienceDropdownOpen(!isAudienceDropdownOpen);
