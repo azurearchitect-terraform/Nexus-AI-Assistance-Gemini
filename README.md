@@ -47,6 +47,13 @@ A unified search and action bar for high-efficiency navigation across the entire
 - **Bullet Rules** lets candidates set budgets for pinned companies, recent roles, platform experience, and total page fit. Rule budgets take precedence over tenure defaults; enforcement can trim excess bullets but never invents bullets to meet a minimum.
 - Settings are stored locally and synced to the signed-in profile. The generated results include a per-role budget report and, when enabled, a trend coverage report.
 
+### Greenhouse and Workday resume exports
+- Preview, PDF, DOCX and compatibility checks share the ordered content from `src/lib/atsDocument.ts`: Professional Summary, Skills, Work Experience, Projects, Certifications and Education. Empty sections are omitted.
+- Contact details stay in the document body with real ` | ` separators and a full, clickable LinkedIn URL. Employment dates are normalized without inventing months for year-only ranges.
+- DOCX uses one section, built-in headings, real list bullets and black Calibri 11 pt text, without tables, images, headers or footers. PDF uses locally installed fonts and disables ligatures; simplified mode prioritizes readable 11 pt text over forced two-page fitting.
+- The compatibility card flags incomplete contacts/employment/education, uncertain dates, overlaps, suspicious characters and typography. PDF text is checked against the canonical blocks before download. PII masking blocks PDF/DOCX downloads and autosave.
+- These checks are not ATS certification. Review all autofilled application fields and follow each employer's accepted file formats and size limits.
+
 ## 🛠 Technical Architecture
 
 - **Frontend**: React 18, Vite, Tailwind CSS, Framer Motion (animations).

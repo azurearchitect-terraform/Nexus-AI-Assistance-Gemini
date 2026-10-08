@@ -69,6 +69,10 @@ import { AudienceIntelligencePanel } from './components/AudienceIntelligencePane
 import { audienceBrief, audiencesToApply, jdFingerprint, type AudienceDecision } from './lib/audienceIntelligence';
 import { MODE_DESCRIPTIONS, AUDIENCES, MODEL_PRICING, TARGET_COMPANIES, BACKGROUND_THEMES } from './constants';
 import { downloadDOCX, downloadJSON } from './services/exportService';
+import { canonicalResume, exportBlocks, assertUnmaskedExport, atsSafePDFStyle, resumeFileName, sanitizedMetadata } from './lib/atsDocument';
+import { checkAtsCompatibility, plainResumeText, validateExportText } from './lib/exportValidation';
+import { AtsCompatibilityCard } from './components/AtsCompatibilityCard';
+import { AtsResume } from './components/AtsResume';
 import { useResumeStore } from './store';
 import { ResumeData, SuitabilityResult, Certification, MasterResume } from './types';
 import { detectOverflow } from './overflowDetection';
@@ -1731,6 +1735,8 @@ export default function App() {
 
   const handleDriveAutosave = async () => {
     try {
+      if (isPiiMasked) return;
+      assertUnmaskedExport(isPiiMasked, canonicalBlocks);
       const element = document.getElementById('resume-container');
       if (!element) return;
 
@@ -1750,18 +1756,18 @@ export default function App() {
 
       const role = targetRole || 'Resume';
       const company = companyName ? `-${companyName}` : '';
-      const driveFileName = `${role}${company}-Harnish Jariwala.pdf`;
+      const driveFileName = resumeFileName(canonicalDocument, role, 'pdf', companyName);
       // Keep the company name out of the PDF /Title metadata - see downloadPDF.
-      const pdfTitle = `Harnish Jariwala - ${role}`;
+      const pdfTitle = `${sanitizedMetadata(canonicalDocument.personal_info.name) || 'Candidate'} - Resume`;
 
       const sessionResponse = await fetch('/api/pdf-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           html: element.outerHTML,
-          css: allStyles + '\n' + scaleCSS,
+          css: allStyles + '\n' + scaleCSS + (previewMode === 'simplified' ? atsSafePDFStyle() : ''),
           title: pdfTitle,
-          scale: printScale,
+          scale: previewMode === 'simplified' ? 1 : printScale,
           fonts: customFonts.map(font => `
             @font-face {
               font-family: '${font.name}';
@@ -1782,6 +1788,9 @@ export default function App() {
       }
       
       const blob = await pdfResponse.blob();
+      const extracted = await extractTextFromPDFFile(new File([blob], driveFileName, { type: 'application/pdf' }));
+      const validation = validateExportText(canonicalBlocks.map(block => block.text).join('\n'), [extracted]);
+      if (validation.errors.length) throw new Error(`PDF text validation failed: ${validation.errors[0]}`);
       const reader = new FileReader();
       reader.readAsDataURL(blob);
       reader.onloadend = async () => {
@@ -2646,43 +2655,12 @@ export default function App() {
   };
 
   const copyResumeText = () => {
-    if (!activeAudience || !results[activeAudience]) return;
-    const res = results[activeAudience];
-    
-    const skillsText = Array.isArray(res.skills) 
-      ? res.skills.join(', ') 
-      : Object.entries(res.skills).map(([cat, items]) => `${cat.toUpperCase()}: ${(items as string[]).join(', ')}`).join('\n');
-
-    const projectsText = res.projects?.map(p => typeof p === 'string' ? p : `${p.title}: ${p.description}`).join('\n');
-
-    const text = `
-${profileName}
-${profileLocation} | ${profileEmail} | ${profilePhone}
-
-PROFESSIONAL SUMMARY
-${res.summary}
-
-SKILLS
-${skillsText}
-
-PROFESSIONAL EXPERIENCE
-${res.experience.map(exp => `
-${exp.role} | ${exp.duration}
-${exp.company}
-${exp.bullets.join('\n')}
-`).join('\n')}
-
-${projectsText ? `PROJECTS\n${projectsText}\n` : ''}
-
-CERTIFICATIONS
-${(res.certifications || [] as (Certification | string)[]).map(formatCertification).join('\n')}
-
-EDUCATION
-${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${edu.degree} - ${edu.institution} (Expected : ${edu.expected_completion})`).join('\n')}
-    `.trim();
-    
-    navigator.clipboard.writeText(text);
-    showToast('Resume text copied to clipboard! You can paste this into Word or any other editor.', 'success');
+    if (isPiiMasked) {
+      showToast('Turn off PII masking before copying resume text.', 'error');
+      return;
+    }
+    navigator.clipboard.writeText(plainResumeText(canonicalDocument));
+    showToast('Resume text copied to clipboard!', 'success');
   };
 
   const leftPanelRef = useRef<HTMLDivElement>(null);
@@ -2829,7 +2807,30 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
     }
   };
 
+  const canonicalDocument = useMemo(() => canonicalResume(results[activeAudience!] || data, {
+    name: profileName, location: profileLocation, email: profileEmail, phone: profilePhone, linkedin: profileLinkedIn,
+  }), [results, activeAudience, data, profileName, profileLocation, profileEmail, profilePhone, profileLinkedIn]);
+  const canonicalBlocks = useMemo(() => exportBlocks(canonicalDocument), [canonicalDocument]);
+  const compatibilityIssues = useMemo(() => {
+    const issues = checkAtsCompatibility(canonicalDocument, canonicalBlocks, { masked: isPiiMasked });
+    if (previewMode === 'standard') {
+      for (const section of ['header', 'summary', 'skills', 'experience', 'projects', 'certifications', 'education']) {
+        const style = getSectionStyle(section);
+        issues.push(...checkAtsCompatibility(canonicalDocument, [], {
+          font: style.fontFamily, sizePt: style.fontSize, scale: printScale,
+        }).filter(issue => /font|body text/i.test(issue.message)));
+      }
+    }
+    return issues.filter((issue, index, all) => all.findIndex(other => other.message === issue.message) === index);
+  }, [canonicalDocument, canonicalBlocks, isPiiMasked, previewMode, getSectionStyle, printScale]);
+
   const downloadPDF = async () => {
+    try {
+      assertUnmaskedExport(isPiiMasked, canonicalBlocks);
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+      return;
+    }
     const element = document.getElementById('resume-container');
     if (!element) return;
 
@@ -2901,15 +2902,15 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
 
       const role = targetRole || 'Resume';
       const companyStr = companyName ? `-${companyName}` : '';
-      const driveFileName = `${role}${companyStr}-Harnish Jariwala.pdf`;
-      const downloadFileName = `${role}-Harnish Jariwala.pdf`;
+      const driveFileName = resumeFileName(canonicalDocument, role, 'pdf', companyName);
+      const downloadFileName = resumeFileName(canonicalDocument, role, 'pdf');
       // The company name is deliberately kept OUT of the PDF's Title metadata.
       // Chrome writes document.title into the PDF /Title field, which every reader
       // shows in its title bar and document properties. Embedding the target
       // company there means a recruiter at the next company opens the file and
       // sees it was tailored for a competitor. The company still goes in the
       // Google Drive filename, which is private to the user.
-      const pdfTitle = `Harnish Jariwala - ${role}`;
+      const pdfTitle = `${sanitizedMetadata(canonicalDocument.personal_info.name) || 'Candidate'} - Resume`;
 
       const sessionResponse = await fetch('/api/pdf-session', {
         method: 'POST',
@@ -2918,9 +2919,9 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
         },
         body: JSON.stringify({
           html: targetOuterHTML,
-          css: allStyles + '\n' + scaleCSS,
+          css: allStyles + '\n' + scaleCSS + (previewMode === 'simplified' ? atsSafePDFStyle() : ''),
           title: pdfTitle,
-          scale: printScale,
+          scale: previewMode === 'simplified' ? 1 : printScale,
           fonts: customFonts.map(font => `
             @font-face {
               font-family: '${font.name}';
@@ -2956,6 +2957,10 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
       }
       
       const blob = await pdfResponse.blob();
+      const extracted = await extractTextFromPDFFile(new File([blob], downloadFileName, { type: 'application/pdf' }));
+      const validation = validateExportText(canonicalBlocks.map(block => block.text).join('\n'), [extracted]);
+      if (validation.errors.length) throw new Error(`PDF text validation failed: ${validation.errors[0]}`);
+      if (blob.size > 2.5 * 1024 * 1024) showToast('This PDF is over 2.5 MB. Large files may not parse reliably in some applicant tracking systems; check the employer’s upload requirements.', 'info');
 
       // Convert blob to base64 for Drive saving
       const reader = new FileReader();
@@ -3024,8 +3029,13 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
   };
 
   const handleDownloadDOCX = async () => {
-    const res = results[activeAudience!] || data;
-    await downloadDOCX(res, targetRole, companyName, showToast);
+    try {
+      assertUnmaskedExport(isPiiMasked, canonicalBlocks);
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+      return;
+    }
+    await downloadDOCX(canonicalDocument, targetRole, companyName, showToast, canonicalBlocks, isPiiMasked);
     
     // Sync to Job Tracker as Applied
     syncJobTrackerApplied();
@@ -5327,6 +5337,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                           <button 
                             onClick={copyResumeText}
                             className={`p-1.5 md:p-2 rounded-lg transition-colors text-[8px] md:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 md:gap-2 ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}
+                            disabled={isPiiMasked}
                             title="Copy text for selectable use"
                           >
                             <Copy className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -5352,6 +5363,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                           <div className="flex items-center gap-1">
                             <button 
                               onClick={handleDownloadDOCX}
+                              disabled={isPiiMasked}
                               className="px-2 md:px-3 py-1.5 md:py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors text-[8px] md:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 md:gap-2 shadow-lg shadow-blue-500/10"
                               title="Download as Word Document"
                             >
@@ -5360,7 +5372,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                             </button>
                             <button 
                               onClick={downloadPDF}
-                              disabled={isDownloading}
+                              disabled={isDownloading || isPiiMasked}
                               className="px-2 md:px-3 py-1.5 md:py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors text-[8px] md:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 md:gap-2 disabled:opacity-50 shadow-lg shadow-emerald-500/10"
                             >
                               {isDownloading ? (
@@ -5375,6 +5387,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                       </div>
                     </div>
                     
+                    <AtsCompatibilityCard issues={compatibilityIssues} masked={isPiiMasked} onCopy={copyResumeText} />
                     <div 
                       ref={previewContainerRef}
                       className={`w-full flex-1 min-h-0 overflow-auto flex items-start justify-center ${isDarkMode ? 'bg-[#1A1A1A]' : 'bg-gray-200/50'} custom-scrollbar`}
@@ -5399,20 +5412,15 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                               id="resume-container"
                               className={`transition-all duration-300 relative ${activeSection ? 'ring-2 ring-emerald-500/20' : ''} ${isDownloading ? 'legacy-colors' : 'shadow-2xl'}`}
                             >
-                          {previewMode === 'standard' ? (
-                            <div className="resume-page" style={{ paddingBottom: isDownloading ? '0' : '2rem' }}>
-                              {renderSection('header')}
-                              {renderSection('summary')}
-                              {renderSection('skills')}
-                              {renderSection('certifications')}
-                              {/* Pass the FULL array, do not slice. Let the print engine handle pagination */}
-                              {renderSection('experience', results[activeAudience!]?.experience || data.experience)}
-                              {renderSection('projects')}
-                              {renderSection('education')}
-                            </div>
-                          ) : (
-                            renderSimplifiedResume()
-                          )}
+                          <AtsResume blocks={canonicalBlocks} masked={isPiiMasked}
+                            onSection={sectionId => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId })}
+                            sectionStyle={previewMode === 'standard' ? sectionId => {
+                              const style = getSectionStyle(sectionId);
+                              return { fontFamily: style.fontFamily, fontSize: `${style.fontSize}pt`, lineHeight: style.lineHeight,
+                                color: style.color, letterSpacing: `${style.letterSpacing}em`,
+                                padding: `${style.padding}px`, marginBottom: `${style.margin}px` };
+                            } : undefined}
+                          />
                           </div>
                           </div>
                         </div>

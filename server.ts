@@ -230,7 +230,7 @@ function decrypt(text: string) {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(cors());
   app.use(bodyParser.json({ limit: '50mb' }));
@@ -1542,6 +1542,13 @@ async function startServer() {
     if (!html) {
       return res.status(400).json({ error: "HTML content is required" });
     }
+    if (/\[(?:REDACTED|MASKED)\b/i.test(html)) {
+      return res.status(400).json({ error: "Turn off PII masking before exporting a resume." });
+    }
+    const safeLayout = /class=["'][^"']*\bats-safe-resume\b/i.test(html);
+    const safeDocumentTitle = String(title || "Resume").replace(/[\x00-\x1f\x7f]/g, "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
     let browser;
     try {
@@ -1563,7 +1570,7 @@ async function startServer() {
         <html>
           <head>
             <meta charset="UTF-8">
-            <title>${String(title || 'Resume').replace(/[<>]/g, '')}</title>
+            <title>${safeDocumentTitle}</title>
             <style>
               /* 1. ATS-SAFE, LOCALLY-RESOLVABLE FONT STACK
                  We deliberately do NOT use a Google web font here. Chrome's PDF
@@ -1734,7 +1741,7 @@ async function startServer() {
       let pageCount = countPdfPages(pdfBuffer);
 
       // pageCount === 0 means the buffer couldn't be parsed; fail open and ship it.
-      if (pageCount > MAX_PAGES) {
+      if (pageCount > MAX_PAGES && !safeLayout) {
         let lo = MIN_SCALE;
         let hi = 1;
         let best: Uint8Array | null = null;
