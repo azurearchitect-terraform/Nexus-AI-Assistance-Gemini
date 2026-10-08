@@ -14,6 +14,8 @@ Unlike simple prompt-based wrappers, NexusPro uses a multi-stage server-side pip
 ### 2. Multi-Audience Strategy
 Generate and manage multiple variations of your resume targeting different career trajectories (e.g., "Engineering Leader" vs "Solution Architect") simultaneously.
 - **Logic**: Leverages the `AUDIENCES` state mapping in `src/App.tsx`.
+- **Audience Intelligence**: After a full job description is pasted or fetched, AI recommends up to three catalog personas with confidence, rationale, and quoted posting evidence. Management personas require verified management/seniority signals; CTO/VP and Microsoft personas have additional evidence gates.
+- **Control and fallback**: Auto-selection is on by default, debounced, and never overwrites a manual selection for the current posting. Apply or re-analyze suggestions explicitly, or turn automation off. Provider routing honors the selected engine; timeouts use a clearly labeled rules fallback. A bounded cache saves only decision IDs/confidence locally, not the job description.
 
 ### 3. NexusPro Insights (STAR Story Generation)
 The AI doesn't just tailor bullets; it prepares you for the interview. It extracts high-impact bullets and builds comprehensive STAR stories (Situation, Task, Action, Result) for each.

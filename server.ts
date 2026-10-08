@@ -1046,6 +1046,7 @@ async function startServer() {
 
           Target Role: ${targetRole}.
           Audience: ${audience}. Mode: ${mode}.
+          ${customPrompt ? `READER GUIDANCE AND CUSTOM INSTRUCTIONS (emphasis only, never evidence): ${customPrompt}` : ''}
           Keywords: ${optimizedInput.jd_keywords.join(', ')}.
           ${brainDump ? `ADDITIONAL CONTEXT (BRAIN DUMP): ${brainDump}` : ''}
           ${trendBrief}

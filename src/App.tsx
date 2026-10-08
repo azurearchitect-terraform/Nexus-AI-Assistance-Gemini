@@ -65,13 +65,15 @@ import { ResumeHealthScore } from './components/ResumeHealthScore';
 import { BulletRulesSettings } from './components/BulletRulesSettings';
 import { BulletBudgetReportCard } from './components/BulletBudgetReportCard';
 import { LinkedInTrendsCard } from './components/LinkedInTrendsCard';
+import { AudienceIntelligencePanel } from './components/AudienceIntelligencePanel';
+import { audienceBrief, jdFingerprint, type AudienceDecision } from './lib/audienceIntelligence';
 import { MODE_DESCRIPTIONS, AUDIENCES, MODEL_PRICING, TARGET_COMPANIES, BACKGROUND_THEMES } from './constants';
 import { downloadDOCX, downloadJSON } from './services/exportService';
 import { useResumeStore } from './store';
 import { ResumeData, SuitabilityResult, Certification, MasterResume } from './types';
 import { detectOverflow } from './overflowDetection';
 import { useFormatting, DEFAULT_STYLE } from './context/FormattingContext';
-import { optimizeResume, fetchJobDescription, analyzeBestAudiences, evaluateSuitability, OptimizationResult, EngineType, EngineConfig, autoSelectPlayerCoachRole, selectBestMasterResume, startDeepResearch, getDeepResearchStatus } from './services/geminiService';
+import { optimizeResume, fetchJobDescription, analyzeAudienceDecision, evaluateSuitability, OptimizationResult, EngineType, EngineConfig, autoSelectPlayerCoachRole, selectBestMasterResume, startDeepResearch, getDeepResearchStatus } from './services/geminiService';
 import Markdown from 'react-markdown';
 import { RouterConfig } from './services/aiRouter';
 import { extractTextFromPDFFile } from './lib/pdfUtils';
@@ -481,6 +483,16 @@ export default function App() {
   const [isAudienceDropdownOpen, setIsAudienceDropdownOpen] = useState(false);
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const companyDropdownRef = useRef<HTMLDivElement>(null);
+  const [autoAudienceEnabled, setAutoAudienceEnabled] = useState(() => localStorage.getItem('nexus_auto_audience') !== 'false');
+  const [audienceDecision, setAudienceDecision] = useState<AudienceDecision | null>(null);
+  const manualAudienceFingerprint = useRef<string | null>(null);
+  const audienceRequest = useRef(0);
+  const audienceInputs = useRef({ jobDescription, targetRole });
+  audienceInputs.current = { jobDescription, targetRole };
+  useEffect(() => {
+    try { localStorage.setItem('nexus_auto_audience', String(autoAudienceEnabled)); }
+    catch (error) { console.warn("Audience preference could not be saved:", error); }
+  }, [autoAudienceEnabled]);
   const audienceDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -2069,18 +2081,24 @@ export default function App() {
     navigate('/build');
   };
 
-  const handleAutoSelectAudiences = async () => {
+  const handleAutoSelectAudiences = async (force = true, autoApply = true) => {
     if (!jobDescription) return;
     setIsAutoSelectingAudiences(true);
     try {
-      const bestAudiences = await analyzeBestAudiences(jobDescription, targetRole, getRouterConfig());
-      setSelectedAudiences(bestAudiences);
-      showToast('Audience auto-selected!', 'success');
+      const decision = await analyzeAudienceDecision(jobDescription, targetRole, getRouterConfig(), { fastMode, force });
+      if (request !== audienceRequest.current ||
+        fingerprint !== jdFingerprint(audienceInputs.current.jobDescription, audienceInputs.current.targetRole)) return;
+      setAudienceDecision(decision);
+      if (autoApply && manualAudienceFingerprint.current !== fingerprint) {
+        setSelectedAudiences(decision.audiences.map((pick) => pick.id));
+      }
     } catch (e) {
+    const request = ++audienceRequest.current;
+    const fingerprint = jdFingerprint(jobDescription, targetRole);
       console.error(e);
       showToast('Failed to auto-select audience', 'error');
     } finally {
-      setIsAutoSelectingAudiences(false);
+      if (request === audienceRequest.current) setIsAutoSelectingAudiences(false);
     }
   };
 
@@ -2091,6 +2109,7 @@ export default function App() {
   };
 
   const getRouterConfig = (): RouterConfig => {
+    manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
     return {
       mode: selectedEngine as any,
       geminiConfig: {
@@ -2112,6 +2131,25 @@ export default function App() {
       return;
     }
     
+  useEffect(() => {
+    setAudienceDecision(null);
+    const fingerprint = jdFingerprint(jobDescription, targetRole);
+    if (!autoAudienceEnabled || jobDescription.trim().length < 200) {
+      audienceRequest.current++;
+      setIsAutoSelectingAudiences(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (fingerprint === jdFingerprint(audienceInputs.current.jobDescription, audienceInputs.current.targetRole)) {
+        void handleAutoSelectAudiences(false, true);
+      }
+    }, 1500);
+    return () => {
+      clearTimeout(timer);
+      audienceRequest.current++;
+    };
+  }, [jobDescription, targetRole, autoAudienceEnabled]);
+
     setIsFetchingJob(true);
     setError(null);
     try {
@@ -2302,9 +2340,19 @@ export default function App() {
     if (currentAudiences.length === 0) {
       console.log("[Nexus AI] No audiences selected, analyzing best audiences...");
       setIsOptimizing(true);
+    let optimizationJobDescription = jobDescription;
+    let optimizationAudienceDecision = audienceDecision;
       
       try {
-        const bestAudiences = await analyzeBestAudiences(jobDescription || jobUrl || "", targetRole || "Professional Candidate", getRouterConfig(), fastMode);
+        const posting = jobDescription || await fetchJobDescription(jobUrl, getRouterConfig());
+        optimizationJobDescription = posting;
+        if (!jobDescription) setJobDescription(posting);
+        const decision = audienceDecision?.fingerprint === jdFingerprint(posting, targetRole)
+          ? audienceDecision
+          : await analyzeAudienceDecision(posting, targetRole, getRouterConfig(), { fastMode });
+        setAudienceDecision(decision);
+        optimizationAudienceDecision = decision;
+        const bestAudiences = decision.audiences.map((pick) => pick.id);
         console.log("[Nexus AI] Best Audiences matched:", bestAudiences);
         if (bestAudiences && bestAudiences.length > 0) {
           setSelectedAudiences(bestAudiences);
@@ -2367,9 +2415,13 @@ export default function App() {
       const finalTargetRole = targetRole || "Professional Candidate";
       let finalMode = mode;
       try {
-        const isPC = await autoSelectPlayerCoachRole(jobDescription, getRouterConfig());                
+        const isPC = await autoSelectPlayerCoachRole(optimizationJobDescription, getRouterConfig());
         if (isPC) {
           console.log("[Nexus AI] Auto-detected Player-Coach role based on JD.");
+      if (!optimizationJobDescription && jobUrl) {
+        optimizationJobDescription = await fetchJobDescription(jobUrl, getRouterConfig());
+        setJobDescription(optimizationJobDescription);
+      }
           finalMode = 'Player-Coach';
         }
       } catch (err) {
@@ -2407,7 +2459,7 @@ export default function App() {
         
         const data = await optimizeResume(
           finalResumeText, 
-          jobDescription, 
+          optimizationJobDescription,
           finalTargetRole, 
           finalMode, 
           audienceLabel, 
@@ -2421,7 +2473,13 @@ export default function App() {
           selectedEngine.includes('hybrid') ? selectedEngine : undefined,
           targetCompany,
           brainDump,
-          { bulletRules, linkedinTrends: followLinkedInTrends }
+          {
+            bulletRules, linkedinTrends: followLinkedInTrends,
+            audienceBrief: audienceBrief(
+              optimizationAudienceDecision?.fingerprint === jdFingerprint(optimizationJobDescription, targetRole) ? optimizationAudienceDecision : null,
+              audienceId
+            ),
+          }
         );
         
         completedAudiences++;
@@ -3808,6 +3866,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                       Reset
                                     </button>
                                     <button 
+                                        manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedAudiences([]);
@@ -3817,6 +3876,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                       Clear
                                     </button>
                                   </div>
+                                        manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
                                   {AUDIENCES.map((audience) => (
                                     <button
                                       key={audience.id}
@@ -3858,6 +3918,24 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                               <div className="space-y-3">
                                 <div className="relative group">
                                   <input 
+                              <AudienceIntelligencePanel
+                                decision={audienceDecision}
+                                enabled={autoAudienceEnabled}
+                                loading={isAutoSelectingAudiences}
+                                isDarkMode={isDarkMode}
+                                onToggle={() => setAutoAudienceEnabled((enabled) => !enabled)}
+                                onAnalyze={() => void handleAutoSelectAudiences(true, false)}
+                                onApply={() => {
+                                  if (!audienceDecision) return;
+                                  manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
+                                  setSelectedAudiences(audienceDecision.audiences.map((pick) => pick.id));
+                                }}
+                                onCustom={(persona) => {
+                                  manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
+                                  setCustomAudience(persona);
+                                  setSelectedAudiences(['custom']);
+                                }}
+                              />
                                     type="url"
                                     placeholder="Paste Job Posting URL here"
                                     className={`w-full px-4 py-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all pr-12 ${
