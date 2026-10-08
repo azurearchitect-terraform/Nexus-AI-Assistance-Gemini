@@ -22,6 +22,20 @@ import { generatePerRole } from "./server/roleGenerator";
 import { deduplicateAndScore } from "./server/dedup";
 import { saveResumeVersion } from "./server/memory";
 import { buildResumeGenerationPrompt } from "./src/lib/resumePrompt";
+import {
+  activeBulletRules,
+  bulletRulesFingerprint,
+  enforceBulletBudgets,
+  planBulletBudgets,
+} from "./src/lib/bulletBudget";
+import {
+  activeLinkedInTrends,
+  applyTrendCoverage,
+  buildTrendBrief,
+  trendEvidenceText,
+  trendFingerprint,
+  trendPreferTerms,
+} from "./src/lib/linkedinTrends";
 // import { scrapeJobs } from "./server/jobScraper";
 
 dotenv.config();
@@ -755,12 +769,17 @@ async function startServer() {
       pipelineType,
       targetCompany,
       brainDump,
-      apiKey
+      apiKey,
+      requestedBulletRules,
+      linkedinTrends
     } = req.body;
 
     if (!resumeText || !jobDescription) {
       return res.status(400).json({ error: "Missing required fields" });
     }
+
+    const bulletRules = activeBulletRules(requestedBulletRules);
+    const trends = activeLinkedInTrends(linkedinTrends, targetRole, jobDescription);
 
     try {
       // 1. Fetch keys securely from Firestore
@@ -828,7 +847,9 @@ async function startServer() {
         customPrompt,
         pipelineType: selectedPipeline,
         hasGemini: !!geminiKey,
-        hasOpenAI: !!openaiKey
+        hasOpenAI: !!openaiKey,
+        ...(bulletRules ? { bulletRules: bulletRulesFingerprint(bulletRules) } : {}),
+        ...(trends ? { linkedinTrends: trendFingerprint(trends) } : {})
       });
       
       const cachedResult = pipelineCache.get(cacheKey);
@@ -873,7 +894,15 @@ async function startServer() {
 
       // STEP 2: Internal Logic (Free) - Trimming
       console.log("[Pipeline] Step 2: Trimming Content...");
-      const optimizedInput = Optimization.trimContentForAI(resumeData, jdKeywords);
+      const budgetOptions = { now: new Date(), rules: bulletRules, jobDescription };
+      const optimizedInput = Optimization.trimContentForAI(resumeData, jdKeywords, budgetOptions);
+      const budgetPlan = planBulletBudgets(optimizedInput.experience, budgetOptions);
+      const trendBrief = trends
+        ? buildTrendBrief(trends, {
+            scope: "document",
+            evidenceText: trendEvidenceText(resumeText, brainDump),
+          })
+        : "";
       
       console.log("=== OPTIMIZED INPUT EXPERIENCE ===");
       console.dir(optimizedInput.experience, { depth: null });
@@ -896,6 +925,10 @@ async function startServer() {
         jobDescription: Optimization.trimInput(jobDescription, 6000),
         inputLabel: "INPUT DATA (structured, pre-extracted and trimmed)",
         inputData: JSON.stringify(optimizedInput, null, 2),
+        bulletBudgets: budgetPlan.budgets,
+        bulletRules: budgetPlan.rules,
+        platformDecision: budgetPlan.platform,
+        trendBrief,
       });
 
       let result;
@@ -1015,6 +1048,7 @@ async function startServer() {
           Audience: ${audience}. Mode: ${mode}.
           Keywords: ${optimizedInput.jd_keywords.join(', ')}.
           ${brainDump ? `ADDITIONAL CONTEXT (BRAIN DUMP): ${brainDump}` : ''}
+          ${trendBrief}
           
           INPUT DATA:
           ${JSON.stringify({
@@ -1076,7 +1110,8 @@ async function startServer() {
             audience,
             mode,
             customPrompt,
-            brainDump
+            brainDump,
+            { budgetPlan, bulletRules: budgetPlan.rules, trends }
           )
         ]);
 
@@ -1125,6 +1160,28 @@ async function startServer() {
       }
     }
     
+    if (result?.result) {
+      const parsedResult = JSON.parse(result.result);
+      if (trends) delete parsedResult.linkedin_trends;
+      enforceBulletBudgets(parsedResult, {
+        sourceText: [resumeText, brainDump].filter(Boolean).join("\n\n"),
+        rules: budgetPlan.rules,
+        jobDescription,
+        sourceRoles: optimizedInput.experience,
+        now: budgetOptions.now,
+        ...(trends
+          ? { preferTerms: trendPreferTerms(trends, trendEvidenceText(resumeText, brainDump)) }
+          : {}),
+      });
+      if (trends) {
+        applyTrendCoverage(parsedResult, trends, {
+          sourceText: resumeText,
+          extraEvidence: brainDump ? [brainDump] : [],
+        });
+      }
+      result.result = JSON.stringify(parsedResult);
+    }
+
     // STEP 5: Cache Result (Merged/Unified)
     if (result) {
       Optimization.saveToCache(cacheKey, result);

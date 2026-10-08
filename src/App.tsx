@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue, Suspense, lazy } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   FileText, 
@@ -62,6 +62,9 @@ import { SortableSection } from './components/SortableSection';
 import { StatusIndicator } from './components/StatusIndicator';
 import { Toast, ConfirmDialog } from './components/UI.tsx';
 import { ResumeHealthScore } from './components/ResumeHealthScore';
+import { BulletRulesSettings } from './components/BulletRulesSettings';
+import { BulletBudgetReportCard } from './components/BulletBudgetReportCard';
+import { LinkedInTrendsCard } from './components/LinkedInTrendsCard';
 import { MODE_DESCRIPTIONS, AUDIENCES, MODEL_PRICING, TARGET_COMPANIES, BACKGROUND_THEMES } from './constants';
 import { downloadDOCX, downloadJSON } from './services/exportService';
 import { useResumeStore } from './store';
@@ -103,6 +106,9 @@ import CorporateProgressLoader from './components/CorporateProgressLoader';
 import { AuthModal } from './components/AuthModal';
 import { TermsModal } from './components/TermsModal';
 import { formatCertification } from './lib/certifications';
+import { defaultBulletRules, normalizeBulletRules, type BulletRules } from './lib/bulletBudget';
+import { bulletRulesSummary } from './lib/bulletRulesPreview';
+import { curatedTrends } from './lib/linkedinTrends';
 
 import defaultMasterResume from './services/master_resume.json';
 
@@ -120,6 +126,26 @@ const LoadingSpinner = () => (
 );
 
 type OptimizationMode = 'conservative' | 'balanced' | 'aggressive' | 'automatic' | 'Player-Coach';
+
+const BULLET_RULES_STORAGE_KEY = 'nexus_bullet_rules';
+const LINKEDIN_TRENDS_STORAGE_KEY = 'nexus_follow_linkedin_trends';
+
+function loadSavedBulletRules(): BulletRules {
+  try {
+    const saved = localStorage.getItem(BULLET_RULES_STORAGE_KEY);
+    return (saved && normalizeBulletRules(JSON.parse(saved))) || defaultBulletRules();
+  } catch {
+    return defaultBulletRules();
+  }
+}
+
+function loadFollowLinkedInTrends(): boolean {
+  try {
+    return localStorage.getItem(LINKEDIN_TRENDS_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
 
 import { CommandPalette } from './components/CommandPalette';
 
@@ -209,6 +235,16 @@ export default function App() {
   const [renamingDriveFileId, setRenamingDriveFileId] = useState<string | null>(null);
   const [newDriveFileName, setNewDriveFileName] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [bulletRules, setBulletRules] = useState<BulletRules>(loadSavedBulletRules);
+  const [followLinkedInTrends, setFollowLinkedInTrends] = useState<boolean>(loadFollowLinkedInTrends);
+  useEffect(() => {
+    try {
+      localStorage.setItem(BULLET_RULES_STORAGE_KEY, JSON.stringify(bulletRules));
+      localStorage.setItem(LINKEDIN_TRENDS_STORAGE_KEY, String(followLinkedInTrends));
+    } catch {
+      // Keep the settings active for this session when local storage is unavailable.
+    }
+  }, [bulletRules, followLinkedInTrends]);
   const [isDriveConnected, setIsDriveConnected] = useState(() => {
     return localStorage.getItem('isDriveConnected') === 'true';
   });
@@ -418,7 +454,7 @@ export default function App() {
   useEffect(() => {
     if (isInitialLoad.current) return;
     if (user) setHasUnsavedChanges(true);
-  }, [resumeText, customPrompt, isDriveConnected, versioningEnabled, isAutosaveEnabled, selectedDriveFolder, driveAccessToken, user, masterResumes]);
+  }, [resumeText, customPrompt, bulletRules, followLinkedInTrends, isDriveConnected, versioningEnabled, isAutosaveEnabled, selectedDriveFolder, driveAccessToken, user, masterResumes]);
   const [jobDescription, setJobDescription] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
@@ -429,6 +465,13 @@ export default function App() {
   const [targetRole, setTargetRole] = useState('');
   const [targetCompany, setTargetCompany] = useState('none');
   const [brainDump, setBrainDump] = useState('');
+  const deferredJobDescription = useDeferredValue(jobDescription);
+  const trendPreview = useMemo(
+    () => followLinkedInTrends
+      ? curatedTrends(targetRole || 'Professional Candidate', deferredJobDescription)
+      : null,
+    [followLinkedInTrends, targetRole, deferredJobDescription]
+  );
   const [companyName, setCompanyName] = useState('');
   const [mode, setMode] = useState<OptimizationMode>('balanced');
   const [fastMode, setFastMode] = useState(false);
@@ -510,6 +553,11 @@ export default function App() {
             }
             if (data.customPrompt) {
               setCustomPrompt(data.customPrompt);
+            }
+            const savedBulletRules = normalizeBulletRules(data.bulletRules);
+            if (savedBulletRules) setBulletRules(savedBulletRules);
+            if (typeof data.followLinkedInTrends === 'boolean') {
+              setFollowLinkedInTrends(data.followLinkedInTrends);
             }
             if (data.settings) {
               if (typeof data.settings.versioningEnabled === 'boolean') {
@@ -837,6 +885,8 @@ export default function App() {
         userId: user.uid,
         masterResumes: masterResumes, // Sync array of resumes
         customPrompt: customPrompt || "",
+        bulletRules,
+        followLinkedInTrends,
         settings: {
           versioningEnabled,
           isAutosaveEnabled,
@@ -873,7 +923,7 @@ export default function App() {
     }, 2000); // Sync 2 seconds after last change
 
     return () => clearTimeout(timeoutId);
-  }, [hasUnsavedChanges, user, resumeText, customPrompt, isDriveConnected, versioningEnabled, isAutosaveEnabled, selectedDriveFolder, driveAccessToken, masterResumes]);
+  }, [hasUnsavedChanges, user, resumeText, customPrompt, bulletRules, followLinkedInTrends, isDriveConnected, versioningEnabled, isAutosaveEnabled, selectedDriveFolder, driveAccessToken, masterResumes]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -938,6 +988,8 @@ export default function App() {
         encryptedApiKey: finalEncryptedKey,
         masterResumes: masterResumes,
         customPrompt: customPrompt,
+        bulletRules,
+        followLinkedInTrends,
         settings: {
           versioningEnabled,
           isAutosaveEnabled,
@@ -2368,7 +2420,8 @@ export default function App() {
           customPrompt,
           selectedEngine.includes('hybrid') ? selectedEngine : undefined,
           targetCompany,
-          brainDump
+          brainDump,
+          { bulletRules, linkedinTrends: followLinkedInTrends }
         );
         
         completedAudiences++;
@@ -4273,6 +4326,43 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                             />
                             <p className="text-[10px] opacity-40 mt-1">These instructions will be given high priority during the resume optimization process.</p>
                           </div>
+
+                          <div className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-[11px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-black/5'}`}>
+                            <span className="min-w-0">
+                              <span className="block text-[10px] font-bold uppercase tracking-widest">LinkedIn Trends</span>
+                              <span className={isDarkMode ? 'opacity-60' : 'opacity-70'}>
+                                {trendPreview
+                                  ? `Curated for ${trendPreview.label} (reviewed ${trendPreview.as_of}); unsupported skills are never added.`
+                                  : 'Off - trending skills are not considered.'}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={followLinkedInTrends}
+                              aria-label="Follow LinkedIn trends"
+                              onClick={() => setFollowLinkedInTrends((enabled) => !enabled)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                                followLinkedInTrends ? 'bg-emerald-500' : isDarkMode ? 'bg-white/15' : 'bg-black/15'
+                              }`}
+                            >
+                              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${followLinkedInTrends ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                            </button>
+                          </div>
+
+                          <div className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-[11px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-black/5'}`}>
+                            <span className="min-w-0 truncate" title={bulletRulesSummary(bulletRules).join(' · ')}>
+                              <span className="text-[10px] font-bold uppercase tracking-widest">Bullet Rules: </span>
+                              <span className={isDarkMode ? 'opacity-60' : 'opacity-70'}>
+                                {!bulletRules.enabled
+                                  ? 'Off - using tenure-based budgets'
+                                  : bulletRulesSummary(bulletRules).join(' · ') || 'Enabled; remaining roles use tenure'}
+                              </span>
+                            </span>
+                            <Link to="/profile" className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-emerald-500 hover:underline">
+                              Edit
+                            </Link>
+                          </div>
                         
                         {/* Optimize Button Section */}
                           <div className="pt-4 border-t border-black/5 dark:border-white/10">
@@ -4706,6 +4796,14 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                       </div>
                     )}
                   </section>
+
+                  <BulletRulesSettings
+                    rules={bulletRules}
+                    onChange={setBulletRules}
+                    isDarkMode={isDarkMode}
+                    resumeText={resumeText}
+                    jobDescription={jobDescription}
+                  />
 
                   {/* Google Drive Status/Reconnect */}
                   {!driveAccessToken && user && (
@@ -5238,6 +5336,18 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                       ) : (
                         <div className="w-full max-w-5xl mx-auto h-full p-4 md:p-8">
                           <Suspense fallback={<LoadingSpinner />}>
+                            {activeAudience && results[activeAudience]?.bullet_budget_report && (
+                              <BulletBudgetReportCard
+                                report={results[activeAudience].bullet_budget_report}
+                                isDarkMode={isDarkMode}
+                              />
+                            )}
+                            {activeAudience && results[activeAudience]?.linkedin_trends && (
+                              <LinkedInTrendsCard
+                                report={results[activeAudience].linkedin_trends}
+                                isDarkMode={isDarkMode}
+                              />
+                            )}
                             <NexusProInsights 
                                isDarkMode={isDarkMode} 
                                starStories={activeAudience ? results[activeAudience]?.star_stories : undefined}

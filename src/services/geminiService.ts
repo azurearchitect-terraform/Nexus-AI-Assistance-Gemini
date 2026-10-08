@@ -7,6 +7,16 @@ import { doc, getDoc, getDocFromServer } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { categorizeSkills } from "../lib/skillCategorizer";
 import { buildResumeGenerationPrompt } from "../lib/resumePrompt";
+import { activeBulletRules, enforceBulletBudgets, planBulletBudgets, rolesFromResumeText } from "../lib/bulletBudget";
+import type { BulletBudgetReport, BulletRules } from "../lib/bulletBudget";
+import {
+  activeLinkedInTrends,
+  applyTrendCoverage,
+  buildTrendBrief,
+  trendEvidenceText,
+  trendPreferTerms,
+} from "../lib/linkedinTrends";
+import type { LinkedInTrends, TrendCoverageReport } from "../lib/linkedinTrends";
 
 export interface OptimizationResult {
   personal_info: {
@@ -44,6 +54,8 @@ export interface OptimizationResult {
   rejection_reasons?: string[];
   star_stories?: StarStory[];
   audit_report?: AuditReport;
+  bullet_budget_report?: BulletBudgetReport;
+  linkedin_trends?: TrendCoverageReport;
   _usage?: {
     promptTokenCount: number;
     candidatesTokenCount: number;
@@ -74,6 +86,36 @@ export interface EngineConfig {
   engine: EngineType;
   model: string;
   apiKey?: string; // This will now hold the encrypted API key
+}
+
+export interface OptimizeResumeOptions {
+  bulletRules?: BulletRules | null;
+  linkedinTrends?: boolean;
+}
+
+function finalizeFeatureOutput(
+  parsed: any,
+  resumeText: string,
+  jobDescription: string,
+  brainDump: string | undefined,
+  linkedInPdfText: string | undefined,
+  bulletRules: BulletRules | null,
+  trends: LinkedInTrends | null
+): void {
+  if (trends) delete parsed.linkedin_trends;
+  const evidence = [brainDump, linkedInPdfText].filter((value): value is string => Boolean(value));
+  enforceBulletBudgets(parsed, {
+    sourceText: [resumeText, ...evidence].join("\n\n"),
+    rules: bulletRules,
+    jobDescription,
+    sourceRoles: rolesFromResumeText(resumeText),
+    ...(trends
+      ? { preferTerms: trendPreferTerms(trends, trendEvidenceText(resumeText, ...evidence)) }
+      : {}),
+  });
+  if (trends) {
+    applyTrendCoverage(parsed, trends, { sourceText: resumeText, extraEvidence: evidence });
+  }
 }
 
 function extractJson(text: string): string {
@@ -525,9 +567,12 @@ export async function optimizeResume(
   customPrompt?: string,
   pipelineType?: string,
   targetCompany?: string,
-  brainDump?: string
+  brainDump?: string,
+  options: OptimizeResumeOptions = {}
 ): Promise<OptimizationResult> {
   const routedConfig = routeTask(recruiterSimulationMode ? 'recruiter_simulation' : 'rewrite_resume', config);
+  const bulletRules = activeBulletRules(options.bulletRules);
+  const trends = activeLinkedInTrends(options.linkedinTrends, targetRole, jobDescription);
   
   // Cost-saving logic: If fastMode is enabled, prefer Gemini Flash even in Hybrid mode to reduce OpenAI costs
   let modelToUse = routedConfig.model;
@@ -566,7 +611,9 @@ export async function optimizeResume(
           apiKey: config.openaiConfig.apiKey,
           pipelineType,
           targetCompany,
-          brainDump
+          brainDump,
+          ...(bulletRules ? { bulletRules } : {}),
+          ...(trends ? { linkedinTrends: true } : {})
         })
       });
 
@@ -615,6 +662,7 @@ export async function optimizeResume(
         // reconcile call, so without this the "never drop a job" safeguard would
         // protect only the Gemini/OpenAI engines and silently miss every Hybrid run.
         parsed.experience = reconcileExperience(resumeText, parsed.experience);
+        finalizeFeatureOutput(parsed, resumeText, jobDescription, brainDump, linkedInPdfText, bulletRules, trends);
 
         // Apply title fix to V2 results as well
         const fixTitle = (obj: any): any => {
@@ -641,6 +689,10 @@ export async function optimizeResume(
     }
   }
 
+  const sourceRoles = rolesFromResumeText(resumeText);
+  const budgetPlan = sourceRoles
+    ? planBulletBudgets(sourceRoles, { rules: bulletRules, jobDescription })
+    : undefined;
   const prompt = buildResumeGenerationPrompt({
     targetRole,
     audience,
@@ -652,6 +704,15 @@ export async function optimizeResume(
     jobDescription,
     inputLabel: "SOURCE RESUME (raw text)",
     inputData: resumeText,
+    bulletBudgets: budgetPlan?.budgets,
+    bulletRules,
+    platformDecision: budgetPlan?.platform,
+    trendBrief: trends
+      ? buildTrendBrief(trends, {
+          scope: "document",
+          evidenceText: trendEvidenceText(resumeText, brainDump, linkedInPdfText),
+        })
+      : undefined,
   });
 
   const maxRetries = 5;
@@ -712,6 +773,7 @@ export async function optimizeResume(
 
         // Guarantee no role was silently dropped to satisfy the page budget.
         parsed.experience = reconcileExperience(resumeText, parsed.experience);
+        finalizeFeatureOutput(parsed, resumeText, jobDescription, brainDump, linkedInPdfText, bulletRules, trends);
 
         if (data.usage) {
           parsed._usage = data.usage;

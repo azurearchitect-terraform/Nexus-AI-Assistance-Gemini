@@ -39,6 +39,11 @@ All sensitive API keys (Gemini, OpenAI) are never stored in plain text. They are
 ### 8. Global Command Palette (`Cmd+K`)
 A unified search and action bar for high-efficiency navigation across the entire application workspace.
 
+### LinkedIn Trends and Bullet Rules
+- **LinkedIn Trends** compares a curated, role-specific trend list with evidence in the candidate's resume. Supported skills can inform tailoring; unsupported skills are reported as gaps and are never added.
+- **Bullet Rules** lets candidates set budgets for pinned companies, recent roles, platform experience, and total page fit. Rule budgets take precedence over tenure defaults; enforcement can trim excess bullets but never invents bullets to meet a minimum.
+- Settings are stored locally and synced to the signed-in profile. The generated results include a per-role budget report and, when enabled, a trend coverage report.
+
 ## 🛠 Technical Architecture
 
 - **Frontend**: React 18, Vite, Tailwind CSS, Framer Motion (animations).
