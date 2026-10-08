@@ -479,10 +479,6 @@ export default function App() {
   const [fastMode, setFastMode] = useState(false);
   const [recruiterSimulationMode, setRecruiterSimulationMode] = useState(false);
   const [selectedAudiences, setSelectedAudiences] = useState<string[]>(['microsoft']);
-  const [customAudience, setCustomAudience] = useState('');
-  const [isAudienceDropdownOpen, setIsAudienceDropdownOpen] = useState(false);
-  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
-  const companyDropdownRef = useRef<HTMLDivElement>(null);
   const [autoAudienceEnabled, setAutoAudienceEnabled] = useState(() => localStorage.getItem('nexus_auto_audience') !== 'false');
   const [audienceDecision, setAudienceDecision] = useState<AudienceDecision | null>(null);
   const manualAudienceFingerprint = useRef<string | null>(null);
@@ -493,6 +489,10 @@ export default function App() {
     try { localStorage.setItem('nexus_auto_audience', String(autoAudienceEnabled)); }
     catch (error) { console.warn("Audience preference could not be saved:", error); }
   }, [autoAudienceEnabled]);
+  const [customAudience, setCustomAudience] = useState('');
+  const [isAudienceDropdownOpen, setIsAudienceDropdownOpen] = useState(false);
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const companyDropdownRef = useRef<HTMLDivElement>(null);
   const audienceDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jdTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -2083,6 +2083,8 @@ export default function App() {
 
   const handleAutoSelectAudiences = async (force = true, autoApply = true) => {
     if (!jobDescription) return;
+    const request = ++audienceRequest.current;
+    const fingerprint = jdFingerprint(jobDescription, targetRole);
     setIsAutoSelectingAudiences(true);
     try {
       const decision = await analyzeAudienceDecision(jobDescription, targetRole, getRouterConfig(), { fastMode, force });
@@ -2093,8 +2095,6 @@ export default function App() {
         setSelectedAudiences(decision.audiences.map((pick) => pick.id));
       }
     } catch (e) {
-    const request = ++audienceRequest.current;
-    const fingerprint = jdFingerprint(jobDescription, targetRole);
       console.error(e);
       showToast('Failed to auto-select audience', 'error');
     } finally {
@@ -2103,13 +2103,13 @@ export default function App() {
   };
 
   const toggleAudience = (id: string) => {
+    manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
     setSelectedAudiences(prev => 
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
     );
   };
 
   const getRouterConfig = (): RouterConfig => {
-    manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
     return {
       mode: selectedEngine as any,
       geminiConfig: {
@@ -2125,12 +2125,6 @@ export default function App() {
     };
   };
 
-  const handleFetchJobDescription = async () => {
-    if (!jobUrl) {
-      setError('Please enter a job URL first.');
-      return;
-    }
-    
   useEffect(() => {
     setAudienceDecision(null);
     const fingerprint = jdFingerprint(jobDescription, targetRole);
@@ -2150,6 +2144,12 @@ export default function App() {
     };
   }, [jobDescription, targetRole, autoAudienceEnabled]);
 
+  const handleFetchJobDescription = async () => {
+    if (!jobUrl) {
+      setError('Please enter a job URL first.');
+      return;
+    }
+    
     setIsFetchingJob(true);
     setError(null);
     try {
@@ -2334,14 +2334,14 @@ export default function App() {
       return;
     }
 
+    let optimizationJobDescription = jobDescription;
+    let optimizationAudienceDecision = audienceDecision;
     let currentAudiences = [...selectedAudiences];
     console.log("[Nexus AI] Current Audiences:", currentAudiences);
 
     if (currentAudiences.length === 0) {
       console.log("[Nexus AI] No audiences selected, analyzing best audiences...");
       setIsOptimizing(true);
-    let optimizationJobDescription = jobDescription;
-    let optimizationAudienceDecision = audienceDecision;
       
       try {
         const posting = jobDescription || await fetchJobDescription(jobUrl, getRouterConfig());
@@ -2412,16 +2412,16 @@ export default function App() {
     let finalResumeText = overrideResumeText || resumeText || "";
 
     try {
+      if (!optimizationJobDescription && jobUrl) {
+        optimizationJobDescription = await fetchJobDescription(jobUrl, getRouterConfig());
+        setJobDescription(optimizationJobDescription);
+      }
       const finalTargetRole = targetRole || "Professional Candidate";
       let finalMode = mode;
       try {
         const isPC = await autoSelectPlayerCoachRole(optimizationJobDescription, getRouterConfig());
         if (isPC) {
           console.log("[Nexus AI] Auto-detected Player-Coach role based on JD.");
-      if (!optimizationJobDescription && jobUrl) {
-        optimizationJobDescription = await fetchJobDescription(jobUrl, getRouterConfig());
-        setJobDescription(optimizationJobDescription);
-      }
           finalMode = 'Player-Coach';
         }
       } catch (err) {
@@ -3859,6 +3859,7 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
                                         setSelectedAudiences(['microsoft']);
                                       }}
                                       className="flex-1 py-1 text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20 transition-colors"
@@ -3866,9 +3867,9 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                       Reset
                                     </button>
                                     <button 
-                                        manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
                                         setSelectedAudiences([]);
                                       }}
                                       className="flex-1 py-1 text-[10px] font-bold uppercase tracking-widest bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors"
@@ -3876,7 +3877,6 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                       Clear
                                     </button>
                                   </div>
-                                        manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
                                   {AUDIENCES.map((audience) => (
                                     <button
                                       key={audience.id}
@@ -3911,13 +3911,6 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                   />
                                 </motion.div>
                               )}
-                            </div>
-                            
-                            <div>
-                              <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${isDarkMode ? 'text-white/70' : 'text-slate-800'}`}>Job Description / URL</label>
-                              <div className="space-y-3">
-                                <div className="relative group">
-                                  <input 
                               <AudienceIntelligencePanel
                                 decision={audienceDecision}
                                 enabled={autoAudienceEnabled}
@@ -3936,6 +3929,13 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                   setSelectedAudiences(['custom']);
                                 }}
                               />
+                            </div>
+                            
+                            <div>
+                              <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${isDarkMode ? 'text-white/70' : 'text-slate-800'}`}>Job Description / URL</label>
+                              <div className="space-y-3">
+                                <div className="relative group">
+                                  <input 
                                     type="url"
                                     placeholder="Paste Job Posting URL here"
                                     className={`w-full px-4 py-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all pr-12 ${
