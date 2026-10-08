@@ -178,6 +178,11 @@ export function exportBlocks(resume: AtsDocument): ExportBlock[] {
   return blocks;
 }
 
+/** Sections in canonical reading order. Every renderer must follow it so exported text validates against the blocks. */
+export function exportSections(blocks: ExportBlock[]): ExportBlock["section"][] {
+  return [...new Set(blocks.map(block => block.section))];
+}
+
 /** A heading travels with its first entry, while subsequent entries remain independent. */
 export function groupExportUnits(blocks: ExportBlock[]): { section: ExportBlock["section"]; unit: string; blocks: ExportBlock[] }[] {
   const groups: ReturnType<typeof groupExportUnits> = [];

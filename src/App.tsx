@@ -69,7 +69,7 @@ import { LinkedInTrendsCard } from './components/LinkedInTrendsCard';
 import { audienceBrief, audiencesToApply, describeAppliedAudiences, jdFingerprint, selectionMatchesDecision, type AudienceDecision } from './lib/audienceIntelligence';
 import { MODE_DESCRIPTIONS, AUDIENCES, MODEL_PRICING, TARGET_COMPANIES, BACKGROUND_THEMES } from './constants';
 import { downloadDOCX, downloadJSON } from './services/exportService';
-import { canonicalResume, exportBlocks, assertUnmaskedExport, atsSafePDFStyle, resumeFileName, sanitizedMetadata } from './lib/atsDocument';
+import { canonicalResume, exportBlocks, exportSections, assertUnmaskedExport, atsSafePDFStyle, resumeFileName, sanitizedMetadata } from './lib/atsDocument';
 import { checkAtsCompatibility, plainResumeText, validateExportText } from './lib/exportValidation';
 import { AtsCompatibilityCard } from './components/AtsCompatibilityCard';
 import { AtsResume } from './components/AtsResume';
@@ -5205,7 +5205,7 @@ export default function App() {
                             >
                           {previewMode === 'standard' ? (
                             <div className="resume-page bg-white text-black" style={{ width: '210mm', minHeight: '297mm', padding: '16mm' }}>
-                              {['header', 'summary', 'skills', 'experience', 'projects', 'certifications', 'education'].map(id => renderSection(id))}
+                              {exportSections(canonicalBlocks).map(id => renderSection(id))}
                             </div>
                           ) : renderSimplifiedResume()}
                           </div>

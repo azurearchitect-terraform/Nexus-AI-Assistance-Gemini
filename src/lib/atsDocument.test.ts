@@ -3,7 +3,8 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AtsResume } from "../components/AtsResume";
-import { assertUnmaskedExport, canonicalResume, exportBlocks, formatDurationForAts, groupExportUnits, resumeFileName } from "./atsDocument";
+import { assertUnmaskedExport, canonicalResume, exportBlocks, exportSections, formatDurationForAts, groupExportUnits, resumeFileName } from "./atsDocument";
+import { validateExportText } from "./exportValidation";
 import type { ResumeData } from "../types";
 
 const source: ResumeData = {
@@ -150,4 +151,18 @@ test("education uses Degree | Institution | Sem - N | Expected YYYY and restores
     "details are never copied from a different institution");
   assert.equal(exportBlocks(canonicalResume({ ...source, education: [{ degree: "BSc", institution: "Example University" } as ResumeData["education"][number]] })).at(-1)?.text,
     "BSc | Example University", "no semester or date is invented");
+});
+
+test("Standard preview renders sections in canonical order so PDF text validation passes", () => {
+  const blocks = exportBlocks(canonicalResume(source));
+  assert.deepEqual(exportSections(blocks), ["header", "summary", "skills", "certifications", "experience", "projects", "education"]);
+  // Mirrors App's Standard preview: one section-only render per section, concatenated in the given order.
+  const standardText = (order: string[]) => order.map(section => renderToStaticMarkup(createElement(AtsResume, {
+    blocks: blocks.filter(block => block.section === section), masked: false, sectionOnly: true, sectionStyle: () => ({}),
+  }))).join("").replace(/<[^>]+>/g, "\n");
+  const expected = blocks.map(block => block.text).join("\n");
+  assert.deepEqual(validateExportText(expected, [standardText(exportSections(blocks))]).errors, []);
+  // The previously hard-coded preview order reproduces the reported download failure.
+  assert.match(validateExportText(expected, [standardText(["header", "summary", "skills", "experience", "projects", "certifications", "education"])]).errors[0],
+    /^Reading order or duplicate content mismatch: Work Experience/);
 });

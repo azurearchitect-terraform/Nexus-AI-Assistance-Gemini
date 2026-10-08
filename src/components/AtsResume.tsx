@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { ExportBlock } from "../lib/atsDocument";
-import { groupExportUnits } from "../lib/atsDocument";
+import { exportSections, groupExportUnits } from "../lib/atsDocument";
 
 export function AtsResume({ blocks, masked, sectionStyle, onSection, sectionOnly = false, activeSection }: {
   blocks: ExportBlock[]; masked: boolean;
@@ -11,8 +11,7 @@ export function AtsResume({ blocks, masked, sectionStyle, onSection, sectionOnly
 }) {
   const standard = Boolean(sectionStyle);
   const units = groupExportUnits(blocks);
-  const sections = [...new Set(blocks.map(block => block.section))];
-  const content = sections.map(section => <div key={section}
+  const content = exportSections(blocks).map(section => <div key={section}
     className={`resume-section ${onSection ? "cursor-pointer transition-all rounded hover:bg-black/5" : ""} ${activeSection === section ? "bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30" : ""}`}
     onClick={() => onSection?.(section)}
     style={{ marginBottom: "6pt", ...sectionStyle?.(section), ...(section === "header" ? { textAlign: "center" } : {}) }}>
