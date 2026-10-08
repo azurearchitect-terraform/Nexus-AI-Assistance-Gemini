@@ -36,9 +36,9 @@ export function ProfessionalWelcomePage({
             <h1 id="auth-story-title">A resume that<br />speaks to the<br /><em>right audience.</em></h1>
             <p className="auth-story-intro">Turn the work you’ve done into a clear, tailored story for the role you want. Keep the facts. Find the focus.</p>
             <ul className="auth-value-list">
-              <li><span className="auth-feature-icon"><Target aria-hidden="true" size={21} /></span><div><h2>Choose your AI audience</h2><p>Tailor the emphasis for a recruiter, hiring manager, or technical reviewer.</p></div></li>
+              <li><span className="auth-feature-icon"><Target aria-hidden="true" size={21} /></span><div><h2>Choose your AI audience</h2><p>AI reads the job description and picks the audience, from cloud architect to engineering director, with the JD evidence behind each pick.</p></div></li>
               <li><span className="auth-feature-icon"><TextQuote aria-hidden="true" size={21} /></span><div><h2>Evidence before embellishment</h2><p>Guide AI with bullet rules grounded in your experience. Review every claim before applying.</p></div></li>
-              <li><span className="auth-feature-icon"><FileCheck2 aria-hidden="true" size={21} /></span><div><h2>Export for your application</h2><p>Use Greenhouse and Workday export presets. Always check the final document and uploaded fields.</p></div></li>
+              <li><span className="auth-feature-icon"><FileCheck2 aria-hidden="true" size={21} /></span><div><h2>Export for your application</h2><p>Export ATS-safe PDF and Word files, checked for Greenhouse and Workday parsing. Always check the final document and uploaded fields.</p></div></li>
             </ul>
             <div className="auth-story-note"><span className="auth-note-line" /> Built around your experience, not invented achievements.</div>
           </section>
