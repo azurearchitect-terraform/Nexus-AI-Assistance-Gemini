@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { createResumeDOCX } from "./docxExport";
-import { canonicalResume, exportBlocks } from "./atsDocument";
+import { canonicalResume, exportBlocks, groupExportUnits } from "./atsDocument";
 import type { AtsDocument } from "./atsDocument";
 import { validateExportText } from "./exportValidation";
 
@@ -85,6 +85,15 @@ test("full master DOCX preserves every block and uses bold employment runs, righ
   const zip = await JSZip.loadAsync(bytes);
   const xml = await zip.file("word/document.xml")!.async("string");
   const paragraphXML = [...xml.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)].map(match => match[1]);
+  let paragraphIndex = 0;
+  for (const unit of groupExportUnits(blocks)) {
+    unit.blocks.forEach((_, index) => {
+      const paragraph = paragraphXML[paragraphIndex++];
+      assert.ok(paragraph.includes("<w:keepLines/>"), `${unit.unit}: all paragraphs keep their lines`);
+      assert.equal(paragraph.includes("<w:keepNext/>"), index < unit.blocks.length - 1,
+        `${unit.unit}: only the last paragraph ends the keep-together chain`);
+    });
+  }
   const paragraphs = paragraphXML.map(paragraph => [...paragraph.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)].map(item => decode(item[1])).join(""));
   assert.deepEqual(validateExportText(blocks.map(block => block.text).join("\n"), [paragraphs.join("\n")]).errors, []);
   assert.ok(!/<w:(?:tbl|txbxContent|drawing|pict|headerReference|footerReference)\b/.test(xml));

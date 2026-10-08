@@ -26,6 +26,7 @@ The AI doesn't just tailor bullets; it prepares you for the interview. It extrac
 A complete DTP-style interface to control the resume's visual identity.
 - **Controls**: Live font switching (Sans/Mono/Serif), fluid margin/padding adjustments, and drag-and-drop section reordering.
 - **Logic**: Powered by `@dnd-kit/core` and a custom `FormattingContext`.
+- **Smart page breaks**: Roles and entries are never split across pages; spacing tightens slightly before text shrinks to keep two pages.
 
 ### 5. Job Tracker & CRM
 A built-in workflow manager to track applications, document metadata, and track historical match scores.

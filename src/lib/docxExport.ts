@@ -1,5 +1,5 @@
 import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, Tab, TabStopType, TextRun } from "docx";
-import { assertUnmaskedExport, exportBlocks, sanitizedMetadata } from "./atsDocument";
+import { assertUnmaskedExport, exportBlocks, groupExportUnits, sanitizedMetadata } from "./atsDocument";
 import type { AtsDocument, ExportBlock } from "./atsDocument";
 
 function runs(block: ExportBlock): (TextRun | ExternalHyperlink)[] {
@@ -46,15 +46,16 @@ export async function createResumeDOCX(resume: AtsDocument, blocks = exportBlock
     },
     sections: [{
       properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 907, bottom: 907, left: 907, right: 907 } } },
-      children: blocks.map(block => new Paragraph({
+      children: groupExportUnits(blocks).flatMap(unit => unit.blocks.map((block, index) => new Paragraph({
         children: runs(block),
         ...(block.kind === "heading" ? { heading: HeadingLevel.HEADING_1 } : {}),
         ...(block.kind === "bullet" ? { bullet: { level: 0 } } : {}),
         ...(block.employment ? { tabStops: [{ type: TabStopType.RIGHT, position: 10092 }] } : {}),
         ...(block.section === "header" ? { alignment: AlignmentType.CENTER } : {}),
-        keepNext: block.kind === "heading" || block.kind === "name" || Boolean(block.employment),
+        keepNext: index < unit.blocks.length - 1,
+        keepLines: true,
         spacing: { before: block.kind === "heading" ? 240 : 0, after: 120, line: 300 },
-      })),
+      }))),
     }],
   });
   return Packer.toBlob(document);

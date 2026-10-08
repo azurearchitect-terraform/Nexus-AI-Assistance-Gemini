@@ -1695,6 +1695,10 @@ async function startServer() {
                 -webkit-text-stroke: 0 !important;
               }
               #resume-container .resume-contact { text-align: center !important; }
+              #resume-container .resume-keep {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+              }
             </style>
           </head>
           <body>
@@ -1711,6 +1715,7 @@ async function startServer() {
 
       // Wait for Google Fonts to load
       await page.evaluateHandle('document.fonts.ready');
+      await page.emulateMediaType("print");
 
       // Prefer two pages, while preserving every block and the readable text floor.
       //
@@ -1748,6 +1753,43 @@ async function startServer() {
       // Full size first - most resumes already fit and need no shrinking at all.
       let pdfBuffer = await renderAt(1);
       let pageCount = countPdfPages(pdfBuffer);
+      let density = 1;
+      let finalScale = 1;
+
+      if (pageCount > MAX_PAGES && !safeLayout) {
+        // Snapshot once so the density steps never compound or change font sizes.
+        const spacing = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("#resume-container *"))
+          .map(element => {
+            const style = getComputedStyle(element);
+            return {
+              lineHeight: parseFloat(style.lineHeight), fontSize: parseFloat(style.fontSize),
+              marginTop: parseFloat(style.marginTop), marginBottom: parseFloat(style.marginBottom),
+              paddingTop: parseFloat(style.paddingTop), paddingBottom: parseFloat(style.paddingBottom),
+            };
+          }));
+        for (const factor of [0.94, 0.88]) {
+          density = factor;
+          await page.evaluate(({ spacing, factor }) => {
+            const elements = document.querySelectorAll<HTMLElement>("#resume-container *");
+            spacing.forEach((original, index) => {
+              const element = elements[index];
+              for (const property of ["marginTop", "marginBottom", "paddingTop", "paddingBottom"] as const) {
+                if (Number.isFinite(original[property]) && original[property] >= 0) {
+                  element.style.setProperty(property.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`),
+                    `${original[property] * factor}px`, "important");
+                }
+              }
+              if (Number.isFinite(original.lineHeight)) {
+                element.style.setProperty("line-height",
+                  `${Math.min(original.lineHeight, Math.max(original.fontSize * 1.2, original.lineHeight * factor))}px`, "important");
+              }
+            });
+          }, { spacing, factor });
+          pdfBuffer = await renderAt(1);
+          pageCount = countPdfPages(pdfBuffer);
+          if (pageCount > 0 && pageCount <= MAX_PAGES) break;
+        }
+      }
 
       // pageCount === 0 means the buffer couldn't be parsed; fail open and ship it.
       if (pageCount > MAX_PAGES && !safeLayout) {
@@ -1767,6 +1809,7 @@ async function startServer() {
           const pages = countPdfPages(candidate);
           if (pages > 0 && pages <= MAX_PAGES) {
             best = candidate; // fits - try to grow back toward full size
+            finalScale = mid;
             lo = mid;
           } else {
             hi = mid; // still too long - shrink further
@@ -1774,7 +1817,11 @@ async function startServer() {
         }
 
         // If the readable floor still overflows, preserve the extra pages and all content.
-        pdfBuffer = best ?? await renderAt(MIN_SCALE);
+        if (best) pdfBuffer = best;
+        else {
+          finalScale = MIN_SCALE;
+          pdfBuffer = await renderAt(MIN_SCALE);
+        }
         pageCount = countPdfPages(pdfBuffer);
       }
 
@@ -1783,6 +1830,7 @@ async function startServer() {
       res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
       res.setHeader("Content-Length", pdfBuffer.length);
       res.setHeader("X-Resume-Page-Count", String(pageCount));
+      res.setHeader("X-Resume-Layout", `density=${density}; scale=${finalScale}`);
       res.end(pdfBuffer);
 
     } catch (error: any) {

@@ -20,6 +20,7 @@ export interface AtsDocument {
 export interface ExportBlock {
   kind: "name" | "contact" | "heading" | "text" | "bullet";
   section: "header" | "summary" | "skills" | "experience" | "projects" | "certifications" | "education";
+  unit: string;
   text: string;
   link?: string;
   linkText?: string;
@@ -91,8 +92,8 @@ export function educationText(value: unknown): string {
 /** Ordered body content shared by the preview, PDF, Word and compatibility checks. */
 export function exportBlocks(resume: AtsDocument): ExportBlock[] {
   const blocks: ExportBlock[] = [];
-  const add = (kind: ExportBlock["kind"], section: ExportBlock["section"], value: unknown, link?: string) => {
-    if (text(value)) blocks.push({ kind, section, text: text(value), ...(link ? { link } : {}) });
+  const add = (kind: ExportBlock["kind"], section: ExportBlock["section"], value: unknown, link?: string, unit: string = section) => {
+    if (text(value)) blocks.push({ kind, section, unit, text: text(value), ...(link ? { link } : {}) });
   };
   const section = (id: ExportBlock["section"], heading: string, values: string[], kind: "text" | "bullet" = "text") => {
     if (!values.some(value => text(value))) return;
@@ -119,18 +120,48 @@ export function exportBlocks(resume: AtsDocument): ExportBlock[] {
   }
   if (resume.experience.length) {
     add("heading", "experience", "Work Experience");
-    resume.experience.forEach(role => {
+    resume.experience.forEach((role, index) => {
+      const unit = `experience:${index}`;
       const employment = { title: text(role.role), company: text(role.company), dates: formatDurationForAts(role.duration) };
       const line = [employment.title, employment.company, employment.dates].filter(Boolean).join(" | ");
-      if (line) blocks.push({ kind: "text", section: "experience", text: line, employment });
-      (role.bullets || []).forEach(bullet => add("bullet", "experience", bullet));
+      if (line) blocks.push({ kind: "text", section: "experience", unit, text: line, employment });
+      (role.bullets || []).forEach(bullet => add("bullet", "experience", bullet, undefined, unit));
     });
   }
-  const projects = resume.projects.flatMap(project => typeof project === "string" ? [project] : [project.title, project.description || ""]);
-  section("projects", "Projects", projects);
+  if (resume.projects.some(project => typeof project === "string" ? text(project) : text(project.title) || text(project.description))) {
+    add("heading", "projects", "Projects");
+    resume.projects.forEach((project, index) => {
+      const values = typeof project === "string" ? [project] : [project.title, project.description];
+      values.forEach(value => add("text", "projects", value, undefined, `projects:${index}`));
+    });
+  }
   section("certifications", "Certifications", resume.certifications.map(formatCertification), "bullet");
   section("education", "Education", resume.education.map(educationText));
   return blocks;
+}
+
+/** A heading travels with its first entry, while subsequent entries remain independent. */
+export function groupExportUnits(blocks: ExportBlock[]): { section: ExportBlock["section"]; unit: string; blocks: ExportBlock[] }[] {
+  const groups: ReturnType<typeof groupExportUnits> = [];
+  let headings: ExportBlock[] = [];
+  for (const block of blocks) {
+    if (block.kind === "heading") {
+      headings.push(block);
+      continue;
+    }
+    const previous = groups[groups.length - 1];
+    if (previous?.unit === block.unit && previous.section === block.section && !headings.length) {
+      previous.blocks.push(block);
+    } else {
+      groups.push({ section: block.section, unit: block.unit, blocks: [...headings, block] });
+      headings = [];
+    }
+  }
+  if (headings.length) {
+    const first = headings[0];
+    groups.push({ section: first.section, unit: first.unit, blocks: headings });
+  }
+  return groups;
 }
 
 export function sanitizedMetadata(value: string): string {

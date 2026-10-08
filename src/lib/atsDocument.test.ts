@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AtsResume } from "../components/AtsResume";
-import { assertUnmaskedExport, canonicalResume, exportBlocks, formatDurationForAts, resumeFileName } from "./atsDocument";
+import { assertUnmaskedExport, canonicalResume, exportBlocks, formatDurationForAts, groupExportUnits, resumeFileName } from "./atsDocument";
 import type { ResumeData } from "../types";
 
 const source: ResumeData = {
@@ -53,7 +53,7 @@ test("blocks and preview preserve body contacts, full hyperlink, standard headin
   assert.ok(!masked.includes("taylor@example.org"));
   assert.ok(!masked.includes("Taylor Example"));
   assert.throws(() => assertUnmaskedExport(true, blocks), /PII masking/);
-  assert.throws(() => assertUnmaskedExport(false, [{ kind: "contact", section: "header", text: "[REDACTED EMAIL]" }]), /PII masking/);
+  assert.throws(() => assertUnmaskedExport(false, [{ kind: "contact", section: "header", unit: "header", text: "[REDACTED EMAIL]" }]), /PII masking/);
 });
 
 test("empty contact fields and sections do not create dangling separators or invented content", () => {
@@ -99,4 +99,36 @@ test("Standard section rendering keeps heading rules, bold skill labels and sect
   const simplified = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }));
   assert.ok(!simplified.includes("text-transform:uppercase"));
   assert.ok(!simplified.includes("border-bottom:"));
+});
+
+test("export units keep entries and lists intact, merging section headings into the first unit only", () => {
+  const resume = canonicalResume(source);
+  resume.experience = [
+    { role: "First Engineer", company: "Example", duration: "2020 - 2022", bullets: ["First bullet.", "Second bullet."] },
+    { role: "Second Engineer", company: "Next", duration: "2022 - Present", bullets: ["Third bullet."] },
+  ];
+  resume.projects = [{ title: "First project", description: "First description." }, "Plain project",
+    { title: "", description: "Description only." }];
+  resume.certifications = ["Azure Fundamentals", "Azure Administrator"];
+  resume.education = ["First degree", "Second degree"];
+  const blocks = exportBlocks(resume);
+  const units = groupExportUnits(blocks);
+  assert.deepEqual(units.flatMap(unit => unit.blocks), blocks, "text order and content are untouched");
+  assert.deepEqual(units.map(unit => unit.unit),
+    ["header", "summary", "skills", "experience:0", "experience:1", "projects:0", "projects:1", "projects:2", "certifications", "education"]);
+  assert.deepEqual(units.find(unit => unit.unit === "experience:0")!.blocks.map(block => block.kind), ["heading", "text", "bullet", "bullet"]);
+  assert.deepEqual(units.find(unit => unit.unit === "experience:1")!.blocks.map(block => block.kind), ["text", "bullet"]);
+  assert.deepEqual(units.find(unit => unit.unit === "projects:0")!.blocks.map(block => block.text), ["Projects", "First project", "First description."]);
+  for (const section of ["summary", "skills", "experience", "projects", "certifications", "education"]) {
+    const group = units.find(unit => unit.section === section)!;
+    assert.equal(group.blocks[0].kind, "heading");
+    assert.ok(group.blocks.length > 1);
+  }
+  assert.equal(units.find(unit => unit.unit === "certifications")!.blocks.length, 3);
+  assert.equal(units.find(unit => unit.unit === "education")!.blocks.length, 3);
+  const html = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }));
+  assert.equal((html.match(/data-keep-unit=/g) || []).length, units.length);
+  assert.equal((html.match(/<ul\b/g) || []).length, 3, "one list per role and certification list");
+  assert.equal((html.match(/<li\b/g) || []).length, 5);
+  assert.ok(html.includes("break-inside:avoid;page-break-inside:avoid"));
 });

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { ExportBlock } from "../lib/atsDocument";
+import { groupExportUnits } from "../lib/atsDocument";
 
 export function AtsResume({ blocks, masked, sectionStyle, onSection, sectionOnly = false, activeSection }: {
   blocks: ExportBlock[]; masked: boolean;
@@ -9,12 +10,15 @@ export function AtsResume({ blocks, masked, sectionStyle, onSection, sectionOnly
   activeSection?: string | null;
 }) {
   const standard = Boolean(sectionStyle);
+  const units = groupExportUnits(blocks);
   const sections = [...new Set(blocks.map(block => block.section))];
   const content = sections.map(section => <div key={section}
     className={`resume-section ${onSection ? "cursor-pointer transition-all rounded hover:bg-black/5" : ""} ${activeSection === section ? "bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30" : ""}`}
     onClick={() => onSection?.(section)}
     style={{ marginBottom: "6pt", ...sectionStyle?.(section), ...(section === "header" ? { textAlign: "center" } : {}) }}>
-    {blocks.filter(block => block.section === section).map((block, index) => {
+    {units.filter(unit => unit.section === section).map(unit => <div key={unit.unit}
+      className="resume-keep" data-keep-unit={unit.unit} style={{ display: "block", breakInside: "avoid", pageBreakInside: "avoid" }}>
+    {unit.blocks.map((block, index) => {
       const style: CSSProperties = { margin: "0 0 4pt", overflowWrap: "break-word" };
       const content = masked && block.section === "header" ? (block.kind === "name" ? "[REDACTED NAME]" : "[REDACTED CONTACT]") :
         block.kind === "contact" && block.link && block.linkText ? <>
@@ -33,10 +37,18 @@ export function AtsResume({ blocks, masked, sectionStyle, onSection, sectionOnly
         </div>;
       }
       if (block.skill) return <p key={index} style={style}><strong>{block.skill.category}:</strong> {block.skill.items}</p>;
-      if (block.kind === "bullet") return <ul key={index} style={{ paddingLeft: "18pt", margin: 0, listStyleType: "disc" }}><li style={{ ...style, breakInside: "avoid" }}>{content}</li></ul>;
+      if (block.kind === "bullet") {
+        if (unit.blocks[index - 1]?.kind === "bullet") return null;
+        const bullets = unit.blocks.slice(index).findIndex(entry => entry.kind !== "bullet");
+        const run = unit.blocks.slice(index, bullets < 0 ? undefined : index + bullets);
+        return <ul key={index} style={{ paddingLeft: "18pt", margin: 0, listStyleType: "disc" }}>
+          {run.map((entry, bulletIndex) => <li key={bulletIndex} style={{ ...style, breakInside: "avoid" }}>{entry.text}</li>)}
+        </ul>;
+      }
       return <p key={index} className={block.kind === "contact" ? "resume-contact" : undefined}
         style={{ ...style, ...(block.kind === "contact" ? { fontSize: "10.25pt", textAlign: "center" } : {}) }}>{content}</p>;
     })}
+    </div>)}
   </div>);
   if (sectionOnly) return <>{content}</>;
   return <div className={`resume-page bg-white text-black ${standard ? "" : "ats-safe-resume"}`}

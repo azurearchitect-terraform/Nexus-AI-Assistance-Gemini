@@ -9,10 +9,11 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AtsResume } from "../src/components/AtsResume";
-import { atsSafePDFStyle, canonicalResume, exportBlocks } from "../src/lib/atsDocument";
+import { atsSafePDFStyle, canonicalResume, exportBlocks, groupExportUnits } from "../src/lib/atsDocument";
 import type { AtsDocument } from "../src/lib/atsDocument";
 import { validateExportText } from "../src/lib/exportValidation";
 import { DEFAULT_STYLE } from "../src/context/FormattingContext";
+import { paginationFixture } from "./paginationFixture";
 
 async function unusedPort(): Promise<number> {
   const server = net.createServer();
@@ -22,7 +23,7 @@ async function unusedPort(): Promise<number> {
   return address.port;
 }
 
-test("real server Puppeteer PDF path preserves canonical contacts, headings, dates, fonts and ligature-free text", { timeout: 120000 }, async () => {
+test("real server Puppeteer PDF path preserves canonical content, readable fonts and smart page breaks", { timeout: 180000 }, async () => {
   const port = await unusedPort();
   const chrome = process.env.PUPPETEER_EXECUTABLE_PATH || (process.platform === "win32" &&
     existsSync("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe") ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" : undefined);
@@ -60,6 +61,64 @@ test("real server Puppeteer PDF path preserves canonical contacts, headings, dat
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     assert.ok(ready, `Isolated PDF server did not become ready: ${logs}`);
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    for (const mode of ["standard", "simplified", "stress", "short"] as const) {
+      const fixture = mode === "short" ? { ...paginationFixture, experience: paginationFixture.experience.slice(0, 1), projects: [] } : paginationFixture;
+      const fixtureBlocks = exportBlocks(fixture);
+      const html = `<div id="resume-container">${renderToStaticMarkup(createElement(AtsResume, {
+        blocks: fixtureBlocks, masked: false,
+        ...(mode !== "simplified" ? { sectionStyle: () => ({
+          fontFamily: DEFAULT_STYLE.fontFamily, fontSize: `${DEFAULT_STYLE.fontSize}pt`, lineHeight: DEFAULT_STYLE.lineHeight,
+          color: DEFAULT_STYLE.color, letterSpacing: `${DEFAULT_STYLE.letterSpacing}em`,
+          padding: `${mode === "stress" ? 10 : DEFAULT_STYLE.padding}px`,
+          marginBottom: `${mode === "stress" ? 12 : DEFAULT_STYLE.margin}px`,
+        }) } : {}),
+      }))}</div>`;
+      const session = await fetch(`${base}/api/pdf-session`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, css: mode === "simplified" ? atsSafePDFStyle() : "", fonts: "", title: "Morgan Candidate - Resume" }),
+      });
+      assert.equal(session.status, 200);
+      const { sessionId } = await session.json();
+      const response = await fetch(`${base}/api/download-pdf/${sessionId}`);
+      assert.equal(response.status, 200, logs);
+      const layout = response.headers.get("X-Resume-Layout");
+      assert.ok(layout);
+      console.log(`Pagination ${mode}: ${layout}`);
+      if (mode === "simplified" || mode === "short") assert.equal(layout, "density=1; scale=1");
+      if (mode === "stress") assert.ok(Number(/density=([\d.]+)/.exec(layout)![1]) < 1, "stress case uses density before scaling");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
+      try {
+        const pages: string[] = [];
+        const sizes: number[] = [];
+        for (let index = 1; index <= pdf.numPages; index++) {
+          const content = await (await pdf.getPage(index)).getTextContent();
+          pages.push(content.items.map(item => "str" in item ? item.str : "").join(" "));
+          for (const item of content.items) if ("str" in item && item.str.trim() && !/^[•·]$/.test(item.str)) {
+            sizes.push(Math.hypot(item.transform[0], item.transform[1]));
+          }
+        }
+        if (mode === "standard" || mode === "stress") assert.equal(pdf.numPages, 2, mode);
+        assert.deepEqual(validateExportText(fixtureBlocks.map(block => block.text).join("\n"), pages).errors, [], mode);
+        const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const normalizedPages = pages.map(normalize);
+        for (const unit of groupExportUnits(fixtureBlocks)) {
+          const pageNumbers = unit.blocks.map(block => normalizedPages.findIndex(page => page.includes(normalize(block.text))));
+          assert.ok(pageNumbers.every(page => page >= 0), `${mode}: complete text of ${unit.unit}`);
+          assert.equal(new Set(pageNumbers).size, 1, `${mode}: no split or orphan in ${unit.unit}`);
+        }
+        assert.ok(Math.min(...sizes) >= 10, `${mode}: readability floor`);
+        assert.ok(!/[\uFB00-\uFB06]/u.test(pages.join("\n")));
+        if (process.env.ATS_EXPORT_ARTIFACT_DIR) {
+          await mkdir(process.env.ATS_EXPORT_ARTIFACT_DIR, { recursive: true });
+          await writeFile(path.join(process.env.ATS_EXPORT_ARTIFACT_DIR, `pagination-${mode}.pdf`), bytes);
+          await writeFile(path.join(process.env.ATS_EXPORT_ARTIFACT_DIR, `pagination-${mode}-layout.txt`), layout);
+        }
+      } finally {
+        await pdf.destroy();
+      }
+    }
     const blocks = exportBlocks(resume);
     const html = `<div id="resume-container">${renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }))}</div>`;
     const sessionResponse = await fetch(`${base}/api/pdf-session`, {
@@ -72,7 +131,6 @@ test("real server Puppeteer PDF path preserves canonical contacts, headings, dat
     assert.equal(response.status, 200, logs);
     assert.ok(response.headers.get("content-type")?.includes("application/pdf"));
     const bytes = new Uint8Array(await response.arrayBuffer());
-    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
     try {
       const pages: string[] = [];
