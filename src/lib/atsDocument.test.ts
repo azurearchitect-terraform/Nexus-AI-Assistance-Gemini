@@ -34,13 +34,21 @@ test("blocks and preview preserve body contacts, full hyperlink, standard headin
   assert.deepEqual(blocks.filter(block => block.kind === "heading").map(block => block.text),
     ["Professional Summary", "Skills", "Work Experience", "Projects", "Certifications", "Education"]);
   assert.equal(blocks.find(block => block.kind === "contact")?.text,
-    "London | taylor@example.org | +44 20 7946 0958 | https://linkedin.com/in/taylor-example");
+    "London | taylor@example.org | +44 20 7946 0958 | linkedin.com/in/taylor-example");
+  assert.equal(blocks.find(block => block.kind === "contact")?.link, "https://linkedin.com/in/taylor-example");
+  assert.deepEqual(blocks.find(block => block.employment)?.employment,
+    { title: "Engineer", company: "Example Services", dates: "May 2019 - Aug 2021" });
   assert.ok(blocks.some(block => block.text === "Engineer | Example Services | May 2019 - Aug 2021"));
   const html = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }));
   assert.ok(html.includes('href="https://linkedin.com/in/taylor-example"'));
   assert.ok(html.includes("<li"));
   assert.ok(!/<(?:table|header|footer|img)\b/.test(html));
-  for (const block of blocks) assert.ok(html.includes(block.text) || block.kind === "contact");
+  for (const block of blocks) assert.ok(html.includes(block.text) || block.kind === "contact" || block.employment);
+  assert.ok(html.includes("<strong>Engineer</strong>"));
+  assert.ok(html.includes("<strong>Example Services</strong>"));
+  assert.ok(html.includes('text-align:right'));
+  assert.ok(html.includes("text-align:center"));
+  assert.ok(!html.includes(">https://linkedin.com"));
   const masked = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: true }));
   assert.ok(!masked.includes("taylor@example.org"));
   assert.ok(!masked.includes("Taylor Example"));
@@ -73,6 +81,22 @@ test("ATS durations normalize known months while preserving year-only and unknow
 
 test("filenames use the real candidate name and sanitize unsafe filename characters", () => {
   const resume = canonicalResume(source, { name: "Jordan: Candidate" });
-  assert.equal(resumeFileName(resume, "Engineer/Lead", "docx"), "Jordan Candidate-EngineerLead.docx");
+  assert.equal(resumeFileName(resume, "Engineer/Lead", "docx"), "Jordan Candidate-Engineer Lead.docx");
+  assert.equal(resumeFileName(resume, "Contoso: Ltd/EU", "docx"), "Jordan Candidate-Contoso Ltd EU.docx");
+  assert.equal(resumeFileName(resume, "Contoso:\t Ltd/\u0000EU", "docx"), "Jordan Candidate-Contoso Ltd EU.docx");
   assert.equal(resumeFileName(resume, "", "pdf"), "Jordan Candidate-Resume.pdf");
+});
+
+test("Standard section rendering keeps heading rules, bold skill labels and section formatting; Simplified remains plain", () => {
+  const blocks = exportBlocks(canonicalResume({ ...source, skills: { infrastructure: ["Azure", "Bicep"], devsecops: [], governance: [], observability: [] } }));
+  assert.deepEqual(blocks.find(block => block.skill)?.skill, { category: "infrastructure", items: "Azure, Bicep" });
+  const standard = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false, sectionOnly: true,
+    sectionStyle: section => ({ fontFamily: "Arial", fontSize: section === "skills" ? "12pt" : "11pt", padding: "8px", marginBottom: "10px", lineHeight: 1.4 }) }));
+  assert.ok(standard.includes("<strong>infrastructure:</strong>"));
+  assert.ok(standard.includes("text-transform:uppercase"));
+  assert.ok(standard.includes("border-bottom:1px solid #000"));
+  for (const value of ["font-family:Arial", "font-size:12pt", "padding:8px", "margin-bottom:10px", "line-height:1.4"]) assert.ok(standard.includes(value), value);
+  const simplified = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }));
+  assert.ok(!simplified.includes("text-transform:uppercase"));
+  assert.ok(!simplified.includes("border-bottom:"));
 });

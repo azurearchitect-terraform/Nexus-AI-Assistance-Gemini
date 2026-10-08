@@ -1,16 +1,29 @@
-import { Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
+import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, Tab, TabStopType, TextRun } from "docx";
 import { assertUnmaskedExport, exportBlocks, sanitizedMetadata } from "./atsDocument";
 import type { AtsDocument, ExportBlock } from "./atsDocument";
 
 function runs(block: ExportBlock): (TextRun | ExternalHyperlink)[] {
   const style = { font: "Calibri", color: "000000", size: block.kind === "name" ? 36 : block.kind === "heading" ? 24 : 22,
     bold: block.kind === "name" || block.kind === "heading" };
-  if (block.kind === "contact" && block.link) {
-    const position = block.text.indexOf(block.link);
+  if (block.employment) {
+    const { title, company, dates } = block.employment;
+    return [
+      new TextRun({ text: title, ...style, bold: true }),
+      new TextRun({ text: title && company ? " | " : "", ...style }),
+      new TextRun({ text: company, ...style, bold: true }),
+      new TextRun({ children: dates ? [new Tab(), dates] : [], ...style }),
+    ];
+  }
+  if (block.skill) return [
+    new TextRun({ text: `${block.skill.category}:`, ...style, bold: true }),
+    new TextRun({ text: ` ${block.skill.items}`, ...style }),
+  ];
+  if (block.kind === "contact" && block.link && block.linkText) {
+    const position = block.text.indexOf(block.linkText);
     return [
       new TextRun({ text: block.text.slice(0, position), ...style }),
-      new ExternalHyperlink({ link: block.link, children: [new TextRun({ text: block.link, ...style })] }),
-      new TextRun({ text: block.text.slice(position + block.link.length), ...style }),
+      new ExternalHyperlink({ link: block.link, children: [new TextRun({ text: block.linkText, ...style })] }),
+      new TextRun({ text: block.text.slice(position + block.linkText.length), ...style }),
     ];
   }
   return [new TextRun({ text: block.text, ...style })];
@@ -37,7 +50,9 @@ export async function createResumeDOCX(resume: AtsDocument, blocks = exportBlock
         children: runs(block),
         ...(block.kind === "heading" ? { heading: HeadingLevel.HEADING_1 } : {}),
         ...(block.kind === "bullet" ? { bullet: { level: 0 } } : {}),
-        keepNext: block.kind === "heading" || block.kind === "name",
+        ...(block.employment ? { tabStops: [{ type: TabStopType.RIGHT, position: 10092 }] } : {}),
+        ...(block.section === "header" ? { alignment: AlignmentType.CENTER } : {}),
+        keepNext: block.kind === "heading" || block.kind === "name" || Boolean(block.employment),
         spacing: { before: block.kind === "heading" ? 240 : 0, after: 120, line: 300 },
       })),
     }],

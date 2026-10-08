@@ -1694,6 +1694,7 @@ async function startServer() {
                 -webkit-text-fill-color: currentColor !important;
                 -webkit-text-stroke: 0 !important;
               }
+              #resume-container .resume-contact { text-align: center !important; }
             </style>
           </head>
           <body>
@@ -1711,21 +1712,29 @@ async function startServer() {
       // Wait for Google Fonts to load
       await page.evaluateHandle('document.fonts.ready');
 
-      // Hard 2-page guarantee.
+      // Prefer two pages, while preserving every block and the readable text floor.
       //
       // The frontend can only estimate a fit factor from the on-screen preview,
       // which has different geometry from the print box - so an estimate alone
       // regularly lands on 3 pages. Instead we close the loop: render, count the
-      // pages Chrome actually produced, and binary-search for the LARGEST scale
-      // that still fits. That both guarantees the page count and keeps the text as
-      // large (and therefore as readable) as possible.
+      // pages Chrome actually produced, and binary-search for the LARGEST readable
+      // scale that fits. If the readable floor still overflows, retain extra pages.
       //
       // Shrink-to-fit uses page.pdf({ scale }) - Chrome's own print scale, which
       // repaginates correctly - rather than a CSS transform, which does not: Chrome
       // computes page breaks from the untransformed layout box, so a transform
       // shrinks the painted pixels but leaves the pagination alone.
       const MAX_PAGES = 2;
-      const MIN_SCALE = 0.5; // below this the resume stops being comfortably legible
+      const smallestTextPt = await page.evaluate(() => {
+        const sizes = Array.from(document.querySelectorAll("#resume-container *"))
+          .filter(element => Array.from(element.childNodes).some(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
+          .map(element => parseFloat(getComputedStyle(element).fontSize) * 0.75)
+          .filter(size => Number.isFinite(size) && size > 0);
+        return sizes.length ? Math.min(...sizes) : 11;
+      });
+      // Keep the complete content on additional pages rather than forcing sub-10 pt text.
+      // A small cushion accounts for Chrome's fractional font-size quantization.
+      const MIN_SCALE = Math.min(1, Math.max(0.5, 10.05 / smallestTextPt));
 
       const renderAt = (s: number) => page.pdf({
         format: "A4",
@@ -1764,7 +1773,7 @@ async function startServer() {
           }
         }
 
-        // If even MIN_SCALE overflows, emit that rather than an oversized document.
+        // If the readable floor still overflows, preserve the extra pages and all content.
         pdfBuffer = best ?? await renderAt(MIN_SCALE);
         pageCount = countPdfPages(pdfBuffer);
       }

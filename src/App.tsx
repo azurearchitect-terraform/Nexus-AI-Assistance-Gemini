@@ -111,7 +111,6 @@ import { DriveFolderPicker } from './components/DriveFolderPicker';
 import CorporateProgressLoader from './components/CorporateProgressLoader';
 import { AuthModal } from './components/AuthModal';
 import { TermsModal } from './components/TermsModal';
-import { formatCertification } from './lib/certifications';
 import { defaultBulletRules, normalizeBulletRules, type BulletRules } from './lib/bulletBudget';
 import { bulletRulesSummary } from './lib/bulletRulesPreview';
 import { curatedTrends } from './lib/linkedinTrends';
@@ -2960,6 +2959,8 @@ export default function App() {
       const extracted = await extractTextFromPDFFile(new File([blob], downloadFileName, { type: 'application/pdf' }));
       const validation = validateExportText(canonicalBlocks.map(block => block.text).join('\n'), [extracted]);
       if (validation.errors.length) throw new Error(`PDF text validation failed: ${validation.errors[0]}`);
+      const pageCount = Number(pdfResponse.headers.get('X-Resume-Page-Count'));
+      if (pageCount > 2) showToast(`This PDF is ${pageCount} pages. All content is preserved; adjust layout or content rather than shrinking below readable text sizes.`, 'info');
       if (blob.size > 2.5 * 1024 * 1024) showToast('This PDF is over 2.5 MB. Large files may not parse reliably in some applicant tracking systems; check the employer’s upload requirements.', 'info');
 
       // Convert blob to base64 for Drive saving
@@ -3065,382 +3066,23 @@ export default function App() {
   };
 
   const renderSimplifiedResume = () => {
-    const res = results[activeAudience!] || data;
-    if (!res) return null;
-
-    return (
-      <div className="bg-white text-black leading-tight max-w-[210mm] min-w-[210mm] min-h-[297mm] mx-auto shadow-sm" style={{ padding: '25mm', fontFamily: '"Calibri", "Open Sans", sans-serif' }}>
-        {/* Header */}
-        <div className="text-center mb-5 border-b border-black pb-2">
-          <h1 className="font-bold uppercase mb-0.5 tracking-[0.1em]" style={{ fontSize: '18pt' }}>{res.personal_info?.name || ''}</h1>
-          <p className="font-medium tracking-wide" style={{ fontSize: '10.5pt' }}>
-            {res.personal_info?.location || ''} | {res.personal_info?.email || ''} | {res.personal_info?.phone || ''} | {res.personal_info?.linkedin || ''}
-          </p>
-        </div>
-
-        {/* Summary */}
-        <div className="mb-4">
-          <h2 className="font-bold border-b border-black mb-1 uppercase tracking-[0.05em]" style={{ fontSize: '13pt' }}>Summary</h2>
-          <p className="leading-normal text-justify" style={{ fontSize: '10.5pt' }}>{(res as any).summary || (res as any).personal_info?.summary || ""}</p>
-        </div>
-
-        {/* Skills */}
-        <div className="mb-4">
-          <h2 className="font-bold border-b border-black mb-1 uppercase tracking-[0.05em]" style={{ fontSize: '13pt' }}>Skills</h2>
-          <div className="leading-normal" style={{ fontSize: '10.5pt' }}>
-            {Array.isArray(res.skills) 
-              ? res.skills.join(", ") 
-              : Object.entries(res.skills).map(([cat, skills]) => (
-                  <div key={cat} className="flex">
-                    <span className="font-bold mr-2">{cat}:</span>
-                    <span>{(skills as string[]).join(", ")}</span>
-                  </div>
-                ))}
-          </div>
-        </div>
-
-        {/* Experience */}
-        <div className="mb-4">
-          <h2 className="font-bold border-b border-black mb-1 uppercase tracking-[0.05em]" style={{ fontSize: '13pt' }}>Experience</h2>
-          {Array.isArray(res.experience) && res.experience.map((exp: any, i: number) => (
-            <div key={i} className="mb-3">
-              <div className="flex justify-between font-bold" style={{ fontSize: '11.5pt' }}>
-                <span>{exp.role}</span>
-                <span className="font-medium">{exp.duration}</span>
-              </div>
-              <div className="font-bold mb-0.5" style={{ fontSize: '11pt' }}>{exp.company}</div>
-              <div className="space-y-0.5">
-                {Array.isArray(exp.bullets) && exp.bullets.map((bullet: string, bi: number) => (
-                  <div key={bi} className="flex gap-2">
-                    <span className="shrink-0 text-[10.5pt]">•</span>
-                    <span className="leading-normal" style={{ fontSize: '10.5pt' }}>{bullet}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Projects */}
-        {Array.isArray(res.projects) && res.projects.length > 0 && (
-          <div className="mb-3">
-            <h2 className="font-bold border-b border-black/10 mb-1 uppercase tracking-[0.05em]" style={{ fontSize: '13pt' }}>Projects</h2>
-            {res.projects.map((proj: any, i: number) => (
-              <div key={i} className="mb-1.5">
-                <div className="font-bold" style={{ fontSize: '11.5' }}>{typeof proj === 'string' ? proj : proj.title}</div>
-                {typeof proj !== 'string' && proj.description && (
-                  <div className="flex gap-2">
-                    <span className="shrink-0 text-[10.5pt]">•</span>
-                    <span className="leading-normal" style={{ fontSize: '10.5pt' }}>{proj.description}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Certifications */}
-        {Array.isArray(res.certifications) && res.certifications.length > 0 && (
-          <div className="mb-3">
-            <h2 className="font-bold border-b border-black/10 mb-1 uppercase tracking-[0.05em]" style={{ fontSize: '13pt' }}>Certifications</h2>
-            <div className="space-y-0.5">
-              {res.certifications.map((cert: any, i: number) => (
-                <div key={i} className="text-[10.5pt]">
-                  • {formatCertification(cert)}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Education */}
-        {Array.isArray(res.education) && res.education.length > 0 && (
-          <div className="mb-3">
-            <h2 className="font-bold border-b border-black/10 mb-1 uppercase tracking-[0.05em]" style={{ fontSize: '13pt' }}>Education</h2>
-            <div className="space-y-0.5">
-              {res.education.map((edu: any, i: number) => (
-                <div key={i} className="text-[10.5pt] font-medium">
-                  • {typeof edu === 'string' ? edu : `${edu.degree} - ${edu.institution} (Expected : ${edu.expected_completion})`}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    return <AtsResume blocks={canonicalBlocks} masked={isPiiMasked} />;
   };
 
-  const renderSection = (sectionId: string, customExp?: any[], isContinuation?: boolean) => {
-    switch (sectionId) {
-      case 'header':
-        const personalInfo = {
-          ...(results[activeAudience!]?.personal_info as any || {}),
-          name: profileName || results[activeAudience!]?.personal_info?.name || data.personal_info?.name || '',
-          location: isPiiMasked ? '[REDACTED LOCATION]' : (profileLocation || results[activeAudience!]?.personal_info?.location || data.personal_info?.location || ''),
-          email: isPiiMasked ? '[REDACTED EMAIL]' : (profileEmail || results[activeAudience!]?.personal_info?.email || data.personal_info?.email || ''),
-          phone: isPiiMasked ? '[REDACTED PHONE]' : (profilePhone || results[activeAudience!]?.personal_info?.phone || data.personal_info?.phone || ''),
-          linkedin: profileLinkedIn || results[activeAudience!]?.personal_info?.linkedin || data.personal_info?.linkedin || '',
-          linkedinText: profileLinkedInText || results[activeAudience!]?.personal_info?.linkedinText || '',
-          summary: results[activeAudience!]?.summary || data.personal_info?.summary || ''
-        } as any;
-        return (
-          <div 
-            key="header"
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'header' })}
-            className={`cursor-pointer transition-all rounded p-2 mb-2 resume-section ${activeSection === 'header' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('header').fontFamily, 
-              textAlign: 'center',
-              lineHeight: getSectionStyle('header').lineHeight,
-              color: getSectionStyle('header').color,
-              letterSpacing: `${getSectionStyle('header').letterSpacing}em`,
-              padding: `${getSectionStyle('header').padding}px`,
-              marginBottom: `${getSectionStyle('header').margin}px`,
-            }}
-          >
-            <h1 className="font-bold uppercase tracking-[0.1em] mb-1" style={{ fontSize: '18pt' }}>
-              {personalInfo.name}
-            </h1>
-            <div className="font-medium border-t border-black/10 pt-2 flex justify-center items-center gap-x-4 gap-y-1 flex-wrap" style={{ fontSize: '10.5pt', lineHeight: '1.2' }}>
-              <span className="whitespace-nowrap">{personalInfo.location}</span>
-              <span className="opacity-30"></span>
-              <span className="whitespace-nowrap">{personalInfo.email}</span>
-              <span className="opacity-30"></span>
-              <span className="whitespace-nowrap">{personalInfo.phone}</span>
-              {personalInfo.linkedin && (
-                <>
-                  <span className="opacity-30"></span>
-                  <span className="whitespace-nowrap">LinkedIn: {personalInfo.linkedinText || personalInfo.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, '').replace(/\/$/, '')}</span>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      case 'summary':
-        return (
-          <div 
-            key="summary"
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'summary' })}
-            className={`mb-2 cursor-pointer transition-all rounded p-2 resume-section ${activeSection === 'summary' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('summary').fontFamily, 
-              textAlign: 'justify',
-              lineHeight: getSectionStyle('summary').lineHeight,
-              color: getSectionStyle('summary').color,
-              letterSpacing: `${getSectionStyle('summary').letterSpacing}em`,
-              padding: `${getSectionStyle('summary').padding}px`,
-              marginBottom: `${getSectionStyle('summary').margin}px`,
-              fontSize: `${getSectionStyle('summary').fontSize}px`,
-            }}
-          >
-            <h2 className="font-bold mb-1 uppercase tracking-[0.05em] border-b border-black/10 pb-0.5" style={{ fontSize: '13pt' }}>
-              Summary
-            </h2>
-            <p className="leading-normal" style={{ fontSize: '10.5pt' }}>{results[activeAudience!]?.summary || data.personal_info.summary}</p>
-          </div>
-        );
-      case 'skills':
-        return (
-          <div 
-            key="skills"
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'skills' })}
-            className={`mb-2 cursor-pointer transition-all rounded p-2 resume-section ${activeSection === 'skills' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('skills').fontFamily, 
-              lineHeight: getSectionStyle('skills').lineHeight,
-              color: getSectionStyle('skills').color,
-              letterSpacing: `${getSectionStyle('skills').letterSpacing}em`,
-              padding: `${Math.max(4, getSectionStyle('skills').padding / 2)}px`,
-              marginBottom: `${Math.max(4, getSectionStyle('skills').margin / 2)}px`,
-              fontSize: `${getSectionStyle('skills').fontSize}px`,
-            }}
-          >
-            <h2 className="font-bold mb-1 uppercase tracking-[0.05em] border-b border-black/10 pb-0.5" style={{ fontSize: '13pt' }}>
-              Skills
-            </h2>
-            {results[activeAudience!]?.skills && !Array.isArray(results[activeAudience!].skills) ? (
-              <div className="grid grid-cols-1 gap-y-1">
-                {Object.entries(results[activeAudience!].skills).map(([category, items]) => (
-                  <div key={category} className="grid grid-cols-[190px_1fr] gap-2 text-[10.5pt] leading-tight">
-                    <span className="font-bold">{category}:</span>
-                    <span className="">{(items as unknown as string[]).join(', ')}</span>
-                  </div>
-                ))}
-              </div>
-            ) : typeof data.skills === 'object' && !Array.isArray(data.skills) ? (
-              <div className="grid grid-cols-1 gap-y-1">
-                {Object.entries(data.skills as any).map(([category, items]) => (
-                  <div key={category} className="grid grid-cols-[190px_1fr] gap-2 text-[10.5pt] leading-tight">
-                    <span className="font-bold">{category}:</span>
-                    <span className="">{(items as unknown as string[]).join(', ')}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-[10.5pt] leading-normal">
-                {((
-                  activeAudience && results[activeAudience]?.skills 
-                    ? (Array.isArray(results[activeAudience].skills) 
-                        ? results[activeAudience].skills 
-                        : Object.values(results[activeAudience].skills).flat())
-                    : data.skills
-                ) as string[]).join(', ')}
-              </div>
-            )}
-          </div>
-        );
-      case 'certifications':
-        return (
-          <div 
-            key="certifications"
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'certifications' })}
-            className={`mb-2 cursor-pointer transition-all rounded p-2 resume-section ${activeSection === 'certifications' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('certifications').fontFamily, 
-              lineHeight: getSectionStyle('certifications').lineHeight,
-              color: getSectionStyle('certifications').color,
-              letterSpacing: `${getSectionStyle('certifications').letterSpacing}em`,
-              padding: `${getSectionStyle('certifications').padding}px`,
-              marginBottom: `${getSectionStyle('certifications').margin}px`,
-              fontSize: `${getSectionStyle('certifications').fontSize}px`,
-            }}
-          >
-            <h2 className="font-bold mb-1 uppercase tracking-[0.05em] border-b border-black/10 pb-0.5" style={{ fontSize: '13pt' }}>
-              Certifications
-            </h2>
-            <div className="grid grid-cols-1 gap-0.5">
-              {(results[activeAudience!]?.certifications || data.certifications || []).map((cert: any, i) => (
-                <div key={i} className="text-[10.5pt]">
-                  • {formatCertification(cert)}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      case 'experience':
-        const allExp = customExp || results[activeAudience!]?.experience || data.experience;
-        if (!Array.isArray(allExp) || allExp.length === 0) return null;
-        return (
-          <div 
-            key={isContinuation ? "experience-split-2" : "experience"}
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'experience' })}
-            className={`cursor-pointer transition-all rounded p-2 mb-2 resume-section ${activeSection === 'experience' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('experience').fontFamily, 
-              lineHeight: getSectionStyle('experience').lineHeight,
-              color: getSectionStyle('experience').color,
-              letterSpacing: `${getSectionStyle('experience').letterSpacing}em`,
-              padding: `${getSectionStyle('experience').padding}px`,
-              marginBottom: `${getSectionStyle('experience').margin}px`,
-              fontSize: `${getSectionStyle('experience').fontSize}px`,
-            }}
-          >
-            {!isContinuation && (
-              <h2 className="font-bold mb-1 uppercase tracking-[0.05em] border-b border-black/10 pb-0.5" style={{ fontSize: '13pt' }}>
-                Experience
-              </h2>
-            )}
-            {allExp.map((exp: any, i: number) => (
-              <div key={i} className="experience-item mb-2 last:mb-0">
-                <div className="flex justify-between font-bold items-baseline mb-0">
-                  <span style={{ fontSize: '11.5pt' }}>{exp.role}</span>
-                  <span className="font-medium" style={{ fontSize: '11pt' }}>{exp.duration}</span>
-                </div>
-                <div className="font-bold mb-1" style={{ fontSize: '11.5pt' }}>{exp.company}</div>
-                <ul className="space-y-0.5 list-none p-0 m-0">
-                  {Array.isArray(exp.bullets) && exp.bullets.map((b: string, bi: number) => (
-                    <li key={bi} className="flex gap-2">
-                      <span className="shrink-0">•</span>
-                      <span className="leading-normal" style={{ fontSize: '10.5pt' }}>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        );
-      case 'projects':
-        const allProjects = (Array.isArray(results[activeAudience!]?.projects) && results[activeAudience!]?.projects.length > 0) 
-          ? results[activeAudience!]?.projects 
-          : data.projects;
-        if (!Array.isArray(allProjects) || allProjects.length === 0) return null;
-        return (
-          <div 
-            key="projects"
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'projects' })}
-            className={`mb-2 cursor-pointer transition-all rounded p-2 resume-section ${activeSection === 'projects' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('projects').fontFamily, 
-              lineHeight: getSectionStyle('projects').lineHeight,
-              color: getSectionStyle('projects').color,
-              letterSpacing: `${getSectionStyle('projects').letterSpacing}em`,
-              padding: `${getSectionStyle('projects').padding}px`,
-              marginBottom: `${getSectionStyle('projects').margin}px`,
-              fontSize: `${getSectionStyle('projects').fontSize}px`,
-            }}
-          >
-            <h2 className="font-bold mb-1 uppercase tracking-[0.05em] border-b border-black/10 pb-0.5" style={{ fontSize: '13pt' }}>
-              Projects
-            </h2>
-            <div className="space-y-1.5">
-              {allProjects.map((proj: any, i: number) => (
-                <div key={i} className="project-item mb-1 last:mb-0">
-                  <div className="font-bold mb-0" style={{ fontSize: '11.5pt' }}>
-                    {typeof proj === 'string' ? proj : (proj as any).title}
-                  </div>
-                  {typeof proj !== 'string' && (proj as any).description && (
-                    <div className="flex gap-2">
-                      <span className="shrink-0">•</span>
-                      <span className="leading-normal" style={{ fontSize: '10.5pt' }}>
-                        {(proj as any).description}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      case 'education':
-        const allEdu = (Array.isArray(results[activeAudience!]?.education) && results[activeAudience!]?.education.length > 0) 
-          ? results[activeAudience!]?.education 
-          : data.education || [];
-        if (!Array.isArray(allEdu) || allEdu.length === 0) return null;
-        return (
-          <div 
-            key="education"
-            onClick={() => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: 'education' })}
-            className={`mb-2 cursor-pointer transition-all rounded p-2 resume-section ${activeSection === 'education' ? 'bg-emerald-50/50 outline-dashed outline-1 outline-emerald-500/30' : 'hover:bg-black/5'}`}
-            style={{ 
-              fontFamily: getSectionStyle('education').fontFamily, 
-              lineHeight: getSectionStyle('education').lineHeight,
-              color: getSectionStyle('education').color,
-              letterSpacing: `${getSectionStyle('education').letterSpacing}em`,
-              padding: `${getSectionStyle('education').padding}px`,
-              marginBottom: `${getSectionStyle('education').margin}px`,
-              fontSize: `${getSectionStyle('education').fontSize}px`,
-            }}
-          >
-            <h2 className="font-bold mb-1 uppercase tracking-[0.05em] border-b border-black/10 pb-0.5" style={{ fontSize: '13pt' }}>
-              Education
-            </h2>
-            {allEdu.map((edu: any, i: number) => (
-              <div key={i} className="mb-0.5 last:mb-0" style={{ pageBreakInside: 'avoid' }}>
-                <div className="text-[10.5pt] font-medium">
-                  • {typeof edu === 'string' 
-                    ? edu 
-                    : (edu.degree || edu.institution)
-                      ? `${edu.degree || 'Degree'} - ${edu.institution || 'Institution'}${edu.expected_completion ? ` (Expected : ${edu.expected_completion})` : ''}`
-                      : JSON.stringify(edu)
-                  }
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      default:
-        return null;
+  const renderSection = (sectionId: string) => {
+    const blocks = canonicalBlocks.filter(block => block.section === sectionId);
+    if (blocks.length) {
+      return <AtsResume key={sectionId} blocks={blocks} masked={isPiiMasked} sectionOnly activeSection={activeSection}
+        onSection={id => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId: id })}
+        sectionStyle={id => {
+          const style = getSectionStyle(id);
+          return { fontFamily: style.fontFamily, fontSize: `${style.fontSize}pt`, lineHeight: style.lineHeight,
+            color: style.color, letterSpacing: `${style.letterSpacing}em`,
+            padding: `${style.padding}px`, marginBottom: `${style.margin}px` };
+        }}
+      />;
     }
+    return null;
   };
 
   if (showAdminDashboard) {
@@ -5412,15 +5054,11 @@ export default function App() {
                               id="resume-container"
                               className={`transition-all duration-300 relative ${activeSection ? 'ring-2 ring-emerald-500/20' : ''} ${isDownloading ? 'legacy-colors' : 'shadow-2xl'}`}
                             >
-                          <AtsResume blocks={canonicalBlocks} masked={isPiiMasked}
-                            onSection={sectionId => formattingDispatch({ type: 'SET_ACTIVE_SECTION', sectionId })}
-                            sectionStyle={previewMode === 'standard' ? sectionId => {
-                              const style = getSectionStyle(sectionId);
-                              return { fontFamily: style.fontFamily, fontSize: `${style.fontSize}pt`, lineHeight: style.lineHeight,
-                                color: style.color, letterSpacing: `${style.letterSpacing}em`,
-                                padding: `${style.padding}px`, marginBottom: `${style.margin}px` };
-                            } : undefined}
-                          />
+                          {previewMode === 'standard' ? (
+                            <div className="resume-page bg-white text-black" style={{ width: '210mm', minHeight: '297mm', padding: '16mm' }}>
+                              {['header', 'summary', 'skills', 'experience', 'projects', 'certifications', 'education'].map(id => renderSection(id))}
+                            </div>
+                          ) : renderSimplifiedResume()}
                           </div>
                           </div>
                         </div>

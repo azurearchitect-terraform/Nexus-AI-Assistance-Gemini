@@ -49,8 +49,9 @@ A unified search and action bar for high-efficiency navigation across the entire
 
 ### Greenhouse and Workday resume exports
 - Preview, PDF, DOCX and compatibility checks share the ordered content from `src/lib/atsDocument.ts`: Professional Summary, Skills, Work Experience, Projects, Certifications and Education. Empty sections are omitted.
-- Contact details stay in the document body with real ` | ` separators and a full, clickable LinkedIn URL. Employment dates are normalized without inventing months for year-only ranges.
-- DOCX uses one section, built-in headings, real list bullets and black Calibri 11 pt text, without tables, images, headers or footers. PDF uses locally installed fonts and disables ligatures; simplified mode prioritizes readable 11 pt text over forced two-page fitting.
+- Contact details stay centered in the document body with real ` | ` separators and a compact `linkedin.com/in/<handle>` label linked to the full HTTPS URL. Employment dates are normalized without inventing months for year-only ranges.
+- Standard preview retains per-section formatting, uppercase ruled headings and bold skill categories. Job titles and employers are bold, with dates aligned right in title → company → dates text order; Word uses a right tab stop, never a table. Simplified preview keeps a plain ATS layout.
+- DOCX uses one section, built-in headings, real list bullets and black Calibri 11 pt text, without tables, images, headers or footers. PDF uses locally installed fonts and disables ligatures; simplified mode uses 11 pt body text and 10.25 pt contacts. Standard fitting never shrinks readable text below 10 pt just to force two pages; extra pages retain all content.
 - The compatibility card flags incomplete contacts/employment/education, uncertain dates, overlaps, suspicious characters and typography. PDF text is checked against the canonical blocks before download. PII masking blocks PDF/DOCX downloads and autosave.
 - These checks are not ATS certification. Review all autofilled application fields and follow each employer's accepted file formats and size limits.
 
