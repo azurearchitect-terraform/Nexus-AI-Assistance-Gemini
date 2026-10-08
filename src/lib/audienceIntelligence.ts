@@ -280,6 +280,6 @@ export function audiencesToApply(decision: AudienceDecision): string[] {
   if (!primary) return ["general"];
   const secondary = decision.audiences.find((pick) =>
     pick.id !== primary.id && pick.id !== "general" && primary.id !== "general" &&
-    pick.confidence >= 0.75 && primary.confidence - pick.confidence <= 0.15);
+    pick.confidence >= 0.75 && primary.confidence - pick.confidence <= 0.15 + Number.EPSILON);
   return secondary ? [primary.id, secondary.id] : [primary.id];
 }

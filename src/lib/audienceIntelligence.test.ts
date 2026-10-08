@@ -166,4 +166,7 @@ test("automatic application caps cost at two close confident readers and exclude
   assert.deepEqual(audiencesToApply(decision), ["cloud-architect"]);
   decision.audiences[1].confidence = 0.85;
   assert.deepEqual(audiencesToApply(decision), ["cloud-architect", "microsoft"]);
+  decision.audiences[0].confidence = 0.9;
+  decision.audiences[1].confidence = 0.75;
+  assert.deepEqual(audiencesToApply(decision), ["cloud-architect", "microsoft"]);
 });
