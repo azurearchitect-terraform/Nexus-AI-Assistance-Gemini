@@ -15,6 +15,7 @@ Unlike simple prompt-based wrappers, NexusPro uses a multi-stage server-side pip
 Generate and manage multiple variations of your resume targeting different career trajectories (e.g., "Engineering Leader" vs "Solution Architect") simultaneously.
 - **Logic**: Leverages the `AUDIENCES` state mapping in `src/App.tsx`.
 - **Audience Intelligence**: After a full job description is pasted or fetched, AI recommends up to three catalog personas with confidence, rationale, and quoted posting evidence. Management personas require verified management/seniority signals; CTO/VP and Microsoft personas have additional evidence gates.
+- **Generation cost**: Automatic selection and Apply choose the primary plus at most one secondary with confidence at least 75% and within 15 percentage points of the primary. Other suggestions remain opt-in; each selected audience generates its own resume version. Executive stakeholders and Office-suite proficiency do not establish executive or Microsoft-cloud audiences.
 - **Control and fallback**: Auto-selection is on by default, debounced, and never overwrites a manual selection for the current posting. Apply or re-analyze suggestions explicitly, or turn automation off. Provider routing honors the selected engine; timeouts use a clearly labeled rules fallback. A bounded cache saves only decision IDs/confidence locally, not the job description.
 
 ### 3. NexusPro Insights (STAR Story Generation)

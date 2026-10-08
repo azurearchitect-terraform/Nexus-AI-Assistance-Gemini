@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  audienceBrief, buildAudiencePrompt, extractJdSignals,
+  audienceBrief, audiencesToApply, buildAudiencePrompt, extractJdSignals,
   fuseAudienceDecision, jdFingerprint, scoreAudiencesByRules,
 } from "./audienceIntelligence";
 
@@ -42,7 +42,8 @@ test("a stated team of 12 enables people-leadership selection", () => {
   const decision = fuseAudienceDecision({
     audiences: [{ id: "leadership", confidence: 0.9, evidence: ["Manage a team of 12 engineers."] }],
   }, rules, manager);
-  assert.equal(decision.primary, "leadership");
+  assert.ok(["leadership", "cloud-eng-mgr"].includes(decision.primary));
+  assert.ok(decision.audiences.some((pick) => pick.id === "leadership"));
   assert.ok(decision.audiences[0].confidence >= 0.8);
 });
 
@@ -52,6 +53,8 @@ test("unknown catalog IDs and fabricated JD evidence are rejected", () => {
       { id: "my-own-role", confidence: 1, evidence: [ic] },
       { id: "microsoft", confidence: 1, evidence: ["Manage 500 direct reports at Microsoft."] },
       { id: "custom", confidence: 1, evidence: [ic] },
+      { id: "__proto__", confidence: 1, evidence: [ic] },
+      { id: "toString", confidence: 1, evidence: [ic] },
     ],
     custom_persona: "CEO",
   }, scoreAudiencesByRules(extractJdSignals(ic)), ic);
@@ -83,4 +86,84 @@ test("prompt contains the catalog, strict JSON and bounded posting excerpt", () 
   assert.match(prompt, /posting middle omitted/);
   assert.match(prompt, /cloud-architect:/);
   assert.match(prompt, /custom is never an ID/);
+});
+
+test("principal architect in the Office of the CTO stays an IC architect", () => {
+  const jd = `Principal Cloud Architect
+Join the Office of the CTO as a hands-on Principal Cloud Architect.
+Design multi-region Azure landing zones and review architecture decisions.
+This is an individual contributor role with no direct reports.`;
+  const rules = scoreAudiencesByRules(extractJdSignals(jd, "Principal Cloud Architect"));
+  assert.equal(rules[0].id, "principal-architect");
+  assert.ok(!rules.some((pick) => /cto-vp|director|leadership|mgr/.test(pick.id)));
+});
+
+test("advising executive stakeholders does not make a solutions architect an executive", () => {
+  const jd = `Senior Solutions Architect
+Advise C-level executives on cloud strategy and present architecture options to VP and Director stakeholders.
+Lead customer-facing solution design workshops on AWS.`;
+  const rules = scoreAudiencesByRules(extractJdSignals(jd, "Senior Solutions Architect"));
+  assert.ok(rules.some((pick) => pick.id === "solution-architect"));
+  assert.ok(!rules.some((pick) => /cto-vp|director|leadership|mgr/.test(pick.id)));
+  const decision = fuseAudienceDecision({
+    audiences: [{ id: "cto-vp", confidence: 0.9, reason: "Executive",
+      evidence: ["Advise C-level executives on cloud strategy and present architecture options to VP and Director stakeholders"] }],
+  }, rules, jd, "Senior Solutions Architect");
+  assert.equal(decision.source, "rules");
+  assert.ok(!decision.audiences.some((pick) => pick.id === "cto-vp"));
+});
+
+test("working closely with the Head of Platform does not promote a platform engineer", () => {
+  const jd = `Senior Platform Engineer
+You will work closely with the Head of Platform to build Kubernetes tooling.
+Hands-on role: implement CI/CD pipelines and SRE practices on GCP.`;
+  const rules = scoreAudiencesByRules(extractJdSignals(jd, "Senior Platform Engineer"));
+  assert.ok(!rules.some((pick) => /director|platform-dir|leadership/.test(pick.id)));
+});
+
+test("Office-suite proficiency is not Microsoft enterprise/cloud evidence", () => {
+  const jd = `Cloud Engineer
+Build infrastructure on Google Cloud (GCP) with Terraform.
+Proficiency in Microsoft Office and Microsoft Teams is required.`;
+  const rules = scoreAudiencesByRules(extractJdSignals(jd, "Cloud Engineer"));
+  assert.ok(!rules.some((pick) => pick.id === "microsoft"));
+  const cloudJd = "Enterprise Engineer\nImplement Microsoft 365, Entra and Intune across the organization.";
+  assert.ok(scoreAudiencesByRules(extractJdSignals(cloudJd)).some((pick) => pick.id === "microsoft"));
+});
+
+test("real people-management duties outrank architecture in rules-only decisions", () => {
+  const jd = `Cloud Engineering Manager
+Manage a team of 12 cloud engineers on Azure, own hiring and performance reviews.
+Drive architecture decisions for the platform.`;
+  const rules = scoreAudiencesByRules(extractJdSignals(jd, "Cloud Engineering Manager"));
+  assert.equal(rules[0].id, "cloud-eng-mgr");
+  for (const id of ["leadership", "cloud-eng-mgr", "microsoft"]) assert.ok(rules.some((pick) => pick.id === id));
+});
+
+test("typographic-normalized contiguous quotes are accepted, ellipses are not", () => {
+  const jd = 'Cloud Architect\nDesign Azure landing zones – including the “hub-and-spoke” network topology.';
+  const rules = scoreAudiencesByRules(extractJdSignals(jd, "Cloud Architect"));
+  const decision = fuseAudienceDecision({
+    audiences: [{ id: "cloud-architect", confidence: 0.9, reason: "Design",
+      evidence: ['Design Azure landing zones - including the "hub-and-spoke" network topology'] }],
+  }, rules, jd, "Cloud Architect");
+  assert.equal(decision.source, "ai+rules");
+  const invalid = fuseAudienceDecision({
+    audiences: [{ id: "cloud-architect", confidence: 0.9, evidence: ["Design Azure...network topology"] }],
+  }, rules, jd, "Cloud Architect");
+  assert.equal(invalid.source, "rules");
+});
+
+test("automatic application caps cost at two close confident readers and excludes general secondaries", () => {
+  const decision = fuseAudienceDecision(null, scoreAudiencesByRules(extractJdSignals(manager)), manager);
+  assert.equal(audiencesToApply(decision).length, 2);
+  decision.audiences = [
+    { id: "cloud-architect", label: "Cloud Architect", confidence: 0.95, evidence: [], reason: "Primary" },
+    { id: "microsoft", label: "Microsoft", confidence: 0.75, evidence: [], reason: "Too distant" },
+    { id: "general", label: "General", confidence: 0.94, evidence: [], reason: "General" },
+  ];
+  decision.primary = "cloud-architect";
+  assert.deepEqual(audiencesToApply(decision), ["cloud-architect"]);
+  decision.audiences[1].confidence = 0.85;
+  assert.deepEqual(audiencesToApply(decision), ["cloud-architect", "microsoft"]);
 });

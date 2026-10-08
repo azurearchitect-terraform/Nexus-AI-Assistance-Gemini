@@ -5,14 +5,16 @@ interface Props {
   enabled: boolean;
   loading: boolean;
   isDarkMode: boolean;
+  selectedAudiences: string[];
   onToggle: () => void;
   onApply: () => void;
   onAnalyze: () => void;
   onCustom: (persona: string) => void;
+  onSuggestion: (id: string) => void;
 }
 
 export function AudienceIntelligencePanel({
-  decision, enabled, loading, isDarkMode, onToggle, onApply, onAnalyze, onCustom,
+  decision, enabled, loading, isDarkMode, selectedAudiences, onToggle, onApply, onAnalyze, onCustom, onSuggestion,
 }: Props) {
   return (
     <section aria-label="Audience Intelligence" className={`mt-3 rounded-xl border p-3 text-xs ${
@@ -30,6 +32,7 @@ export function AudienceIntelligencePanel({
           ? decision.source === "rules" ? "Evidence-based rules fallback" : "AI + evidence-based guardrails"
           : "Paste a full job description to get reader suggestions."}
       </p>
+      <p className="mt-1 opacity-80">Each selected audience generates its own resume version. Apply selects the primary and at most one closely matched secondary; other suggestions are opt-in.</p>
       {decision && (
         <>
           <div className="mt-2 flex flex-wrap gap-1">
@@ -53,6 +56,11 @@ export function AudienceIntelligencePanel({
                     {pick.evidence.map((quote, i) => <blockquote key={i} className="mt-1 border-l-2 border-emerald-500 pl-2 break-words">{quote}</blockquote>)}
                   </details>
                 )}
+                <button type="button" disabled={selectedAudiences.includes(pick.id)}
+                  onClick={() => onSuggestion(pick.id)}
+                  className="mt-2 rounded border px-2 py-1 font-medium disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500">
+                  {selectedAudiences.includes(pick.id) ? "Selected" : "Add this audience"}
+                </button>
               </li>
             ))}
           </ol>

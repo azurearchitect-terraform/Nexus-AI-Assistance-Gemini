@@ -66,7 +66,7 @@ import { BulletRulesSettings } from './components/BulletRulesSettings';
 import { BulletBudgetReportCard } from './components/BulletBudgetReportCard';
 import { LinkedInTrendsCard } from './components/LinkedInTrendsCard';
 import { AudienceIntelligencePanel } from './components/AudienceIntelligencePanel';
-import { audienceBrief, jdFingerprint, type AudienceDecision } from './lib/audienceIntelligence';
+import { audienceBrief, audiencesToApply, jdFingerprint, type AudienceDecision } from './lib/audienceIntelligence';
 import { MODE_DESCRIPTIONS, AUDIENCES, MODEL_PRICING, TARGET_COMPANIES, BACKGROUND_THEMES } from './constants';
 import { downloadDOCX, downloadJSON } from './services/exportService';
 import { useResumeStore } from './store';
@@ -2092,7 +2092,7 @@ export default function App() {
         fingerprint !== jdFingerprint(audienceInputs.current.jobDescription, audienceInputs.current.targetRole)) return;
       setAudienceDecision(decision);
       if (autoApply && manualAudienceFingerprint.current !== fingerprint) {
-        setSelectedAudiences(decision.audiences.map((pick) => pick.id));
+        setSelectedAudiences(audiencesToApply(decision));
       }
     } catch (e) {
       console.error(e);
@@ -2352,7 +2352,7 @@ export default function App() {
           : await analyzeAudienceDecision(posting, targetRole, getRouterConfig(), { fastMode });
         setAudienceDecision(decision);
         optimizationAudienceDecision = decision;
-        const bestAudiences = decision.audiences.map((pick) => pick.id);
+        const bestAudiences = audiencesToApply(decision);
         console.log("[Nexus AI] Best Audiences matched:", bestAudiences);
         if (bestAudiences && bestAudiences.length > 0) {
           setSelectedAudiences(bestAudiences);
@@ -3916,12 +3916,17 @@ ${(res.education || [] as any[]).map(edu => typeof edu === 'string' ? edu : `${e
                                 enabled={autoAudienceEnabled}
                                 loading={isAutoSelectingAudiences}
                                 isDarkMode={isDarkMode}
+                                selectedAudiences={selectedAudiences}
                                 onToggle={() => setAutoAudienceEnabled((enabled) => !enabled)}
                                 onAnalyze={() => void handleAutoSelectAudiences(true, false)}
                                 onApply={() => {
                                   if (!audienceDecision) return;
                                   manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
-                                  setSelectedAudiences(audienceDecision.audiences.map((pick) => pick.id));
+                                  setSelectedAudiences(audiencesToApply(audienceDecision));
+                                }}
+                                onSuggestion={(id) => {
+                                  manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
+                                  setSelectedAudiences((selected) => selected.includes(id) ? selected : [...selected, id]);
                                 }}
                                 onCustom={(persona) => {
                                   manualAudienceFingerprint.current = jdFingerprint(jobDescription, targetRole);
