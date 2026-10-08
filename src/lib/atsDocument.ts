@@ -24,7 +24,12 @@ export interface ExportBlock {
   text: string;
   link?: string;
   linkText?: string;
-  employment?: { title: string; company: string; dates: string };
+  /** Role line of an experience entry: bold title with right-aligned dates. */
+  employment?: { title: string; dates: string };
+  /** Company line of an experience entry, rendered bold below the role line. */
+  employer?: boolean;
+  /** Project title, rendered bold. */
+  projectTitle?: boolean;
   skill?: { category: string; items: string };
 }
 
@@ -39,6 +44,7 @@ export function linkedinUrl(value: string): string {
 export function canonicalResume(
   resume: OptimizationResult | ResumeData,
   overrides: Partial<AtsDocument["personal_info"]> = {},
+  source?: OptimizationResult | ResumeData,
 ): AtsDocument {
   const info = { ...resume.personal_info, ...Object.fromEntries(Object.entries(overrides).filter(([, value]) => text(value))) };
   return {
@@ -51,9 +57,31 @@ export function canonicalResume(
     experience: resume.experience || [],
     projects: resume.projects || [],
     certifications: resume.certifications || [],
-    education: resume.education || [],
+    education: withSourceEducation(resume.education || [], source?.education),
   };
 }
+
+const EDUCATION_DETAILS = ["semester", "expected_completion"] as const;
+
+/** Generated output can drop education details; restore only the ones the source states for the same institution. */
+function withSourceEducation(education: unknown[], source?: unknown[]): unknown[] {
+  if (!Array.isArray(source) || !source.length || education === source) return education;
+  const institution = (entry: unknown) => entry && typeof entry === "object"
+    ? text((entry as Record<string, unknown>).institution || (entry as Record<string, unknown>).school).toLowerCase() : "";
+  let changed = false;
+  const merged = education.map(entry => {
+    const key = institution(entry);
+    const match = key && source.find(candidate => institution(candidate) === key) as Record<string, unknown> | undefined;
+    if (!match) return entry;
+    const missing = EDUCATION_DETAILS.filter(field => !detail((entry as Record<string, unknown>)[field]) && detail(match[field]));
+    if (!missing.length) return entry;
+    changed = true;
+    return { ...(entry as object), ...Object.fromEntries(missing.map(field => [field, match[field]])) };
+  });
+  return changed ? merged : education;
+}
+
+const detail = (value: unknown): string => typeof value === "number" ? String(value) : text(value);
 
 function durationEndpoints(duration: string): string[] {
   const normalized = duration.replace(/\b(?:till|to|until|up to)\s+(?:date|now|today)\b/gi, " - Present");
@@ -81,12 +109,18 @@ export function formatDurationForAts(duration: string): string {
   return `${format(range.start, parts[0])} - ${range.ongoing ? "Present" : format(range.end, parts[parts.length - 1])}`;
 }
 
+/** Degree | Institution | Sem - N | Expected YYYY, using only the details the entry states. */
 export function educationText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (!value || typeof value !== "object") return "";
   const entry = value as Record<string, unknown>;
-  return [entry.degree, entry.institution || entry.school, entry.field_of_study || entry.major,
-    entry.duration || entry.expected_completion || entry.graduation_date].map(text).filter(Boolean).join(" | ");
+  const semester = detail(entry.semester ?? entry.sem);
+  const expected = detail(entry.expected_completion).replace(/^expected\s*[:\-]?\s*/i, "");
+  return [
+    detail(entry.degree), detail(entry.institution || entry.school), detail(entry.field_of_study || entry.major),
+    semester && (/^sem(?:ester)?\b/i.test(semester) ? semester : `Sem - ${semester}`),
+    detail(entry.duration) || (expected && `Expected ${expected}`) || detail(entry.graduation_date),
+  ].filter(Boolean).join(" | ");
 }
 
 /** Ordered body content shared by the preview, PDF, Word and compatibility checks. */
@@ -118,24 +152,28 @@ export function exportBlocks(resume: AtsDocument): ExportBlock[] {
       if (category) block.skill = { category, items: block.text.slice(category.length + 2) };
     }
   }
+  section("certifications", "Certifications", resume.certifications.map(formatCertification), "bullet");
   if (resume.experience.length) {
     add("heading", "experience", "Work Experience");
     resume.experience.forEach((role, index) => {
       const unit = `experience:${index}`;
-      const employment = { title: text(role.role), company: text(role.company), dates: formatDurationForAts(role.duration) };
-      const line = [employment.title, employment.company, employment.dates].filter(Boolean).join(" | ");
+      const employment = { title: text(role.role), dates: formatDurationForAts(role.duration) };
+      const line = [employment.title, employment.dates].filter(Boolean).join(" | ");
       if (line) blocks.push({ kind: "text", section: "experience", unit, text: line, employment });
+      const company = text(role.company);
+      if (company) blocks.push({ kind: "text", section: "experience", unit, text: company, employer: true });
       (role.bullets || []).forEach(bullet => add("bullet", "experience", bullet, undefined, unit));
     });
   }
   if (resume.projects.some(project => typeof project === "string" ? text(project) : text(project.title) || text(project.description))) {
     add("heading", "projects", "Projects");
     resume.projects.forEach((project, index) => {
-      const values = typeof project === "string" ? [project] : [project.title, project.description];
-      values.forEach(value => add("text", "projects", value, undefined, `projects:${index}`));
+      const unit = `projects:${index}`;
+      const title = typeof project === "string" ? text(project) : text(project.title);
+      if (title) blocks.push({ kind: "text", section: "projects", unit, text: title, projectTitle: true });
+      if (typeof project !== "string") add("text", "projects", project.description, undefined, unit);
     });
   }
-  section("certifications", "Certifications", resume.certifications.map(formatCertification), "bullet");
   section("education", "Education", resume.education.map(educationText));
   return blocks;
 }

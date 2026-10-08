@@ -43,14 +43,18 @@ test("DOCX XML has canonical body content, built-in headings, real bullets and o
   assert.ok(xml.includes('w:color w:val="000000"'));
   assert.ok(relationships.includes(resume.personal_info.linkedin));
   assert.ok(xml.includes("<w:hyperlink"));
-  const employment = paragraphs.findIndex(paragraph => paragraph.includes("Example & Co"));
-  const paragraphXML = [...xml.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)][employment][1];
-  assert.ok(paragraphXML.includes('<w:tab w:val="right" w:pos="10092"'));
-  assert.ok(paragraphXML.includes("<w:tab/>"));
-  for (const value of ["Engineer", "Example &amp; Co"]) {
-    const run = [...paragraphXML.matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)].find(match => match[1].includes(`>${value}</w:t>`));
+  const allParagraphXML = [...xml.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)].map(match => match[1]);
+  const roleIndex = paragraphs.findIndex(paragraph => paragraph.startsWith("Engineer"));
+  assert.equal(paragraphs[roleIndex + 1], "Example & Co", "company is the line after the role");
+  assert.ok(allParagraphXML[roleIndex].includes('<w:tab w:val="right" w:pos="10092"'));
+  assert.ok(allParagraphXML[roleIndex].includes("<w:tab/>"));
+  for (const [index, value] of [[roleIndex, "Engineer"], [roleIndex + 1, "Example &amp; Co"]] as const) {
+    const run = [...allParagraphXML[index].matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)].find(match => match[1].includes(`>${value}</w:t>`));
     assert.ok(run?.[1].includes("<w:b/>"), value);
   }
+  const project = allParagraphXML[paragraphs.indexOf("Platform")];
+  assert.ok(project.includes("<w:b/>"), "project title is bold");
+  assert.ok(paragraphs.indexOf("Azure Fundamentals") < roleIndex, "certifications precede work experience");
   assert.ok(xml.includes(">linkedin.com/in/jordan-candidate</w:t>"));
   assert.ok(!xml.includes(">https://www.linkedin.com"));
   assert.ok(xml.includes('<w:jc w:val="center"'));
@@ -100,8 +104,9 @@ test("full master DOCX preserves every block and uses bold employment runs, righ
   assert.equal((xml.match(/<w:sectPr\b/g) || []).length, 1);
   assert.equal((xml.match(/<w:tab w:val="right"/g) || []).length, master.experience.length);
   for (const role of master.experience) {
-    const paragraph = paragraphXML.find(value => decode(value).includes(role.role))!;
-    for (const value of [role.role, role.company]) {
+    const index = paragraphXML.findIndex(value => decode(value).includes(`>${role.role}</w:t>`));
+    assert.ok(index >= 0, role.role);
+    for (const [paragraph, value] of [[paragraphXML[index], role.role], [paragraphXML[index + 1], role.company]]) {
       assert.ok([...paragraph.matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)]
         .some(match => match[1].includes("<w:b/>") && decode(match[1]).includes(value)), value);
     }

@@ -2882,7 +2882,7 @@ export default function App() {
 
   const canonicalDocument = useMemo(() => canonicalResume(results[activeAudience!] || data, {
     name: profileName, location: profileLocation, email: profileEmail, phone: profilePhone, linkedin: profileLinkedIn,
-  }), [results, activeAudience, data, profileName, profileLocation, profileEmail, profilePhone, profileLinkedIn]);
+  }, data), [results, activeAudience, data, profileName, profileLocation, profileEmail, profilePhone, profileLinkedIn]);
   const canonicalBlocks = useMemo(() => exportBlocks(canonicalDocument), [canonicalDocument]);
   const compatibilityIssues = useMemo(() => {
     const issues = checkAtsCompatibility(canonicalDocument, canonicalBlocks, { masked: isPiiMasked });

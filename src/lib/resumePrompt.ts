@@ -94,7 +94,7 @@ const OUTPUT_SCHEMA = `{
   "skills": { "Category 1": ["string"], "Category 2": ["string"], "Category 3": ["string"], "Category 4": ["string"] },
   "experience": [ { "id": "string", "role": "string", "company": "string", "duration": "string", "bullets": ["string"] } ],
   "projects": [ { "title": "string", "description": "string" } ],
-  "education": [ { "degree": "string", "institution": "string", "expected_completion": "string" } ],
+  "education": [ { "degree": "string", "institution": "string", "semester": "string, only if the source states it", "expected_completion": "string" } ],
   "certifications": [ { "name": "string", "issuer": "string", "date": "string" } ],
   "ats_keywords_from_jd": ["string"],
   "ats_keywords_added_to_resume": ["string"],

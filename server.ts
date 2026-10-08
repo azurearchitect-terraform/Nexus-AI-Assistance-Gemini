@@ -1079,7 +1079,7 @@ async function startServer() {
             "skills": { "Category 1": ["skill1", ...], ... },
             "why_this_job": "...",
             "projects": [ { "title": "...", "description": "..." } ],
-            "education": [ { "degree": "...", "institution": "...", "expected_completion": "..." } ],
+            "education": [ { "degree": "...", "institution": "...", "semester": "... (only if the source states it)", "expected_completion": "..." } ],
             "certifications": [...],
             "ats_keywords_from_jd": [...],
             "ats_keywords_added_to_resume": [...],

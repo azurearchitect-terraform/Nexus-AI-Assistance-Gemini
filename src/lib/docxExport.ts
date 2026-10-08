@@ -6,14 +6,13 @@ function runs(block: ExportBlock): (TextRun | ExternalHyperlink)[] {
   const style = { font: "Calibri", color: "000000", size: block.kind === "name" ? 36 : block.kind === "heading" ? 24 : 22,
     bold: block.kind === "name" || block.kind === "heading" };
   if (block.employment) {
-    const { title, company, dates } = block.employment;
+    const { title, dates } = block.employment;
     return [
       new TextRun({ text: title, ...style, bold: true }),
-      new TextRun({ text: title && company ? " | " : "", ...style }),
-      new TextRun({ text: company, ...style, bold: true }),
       new TextRun({ children: dates ? [new Tab(), dates] : [], ...style }),
     ];
   }
+  if (block.employer || block.projectTitle) return [new TextRun({ text: block.text, ...style, bold: true })];
   if (block.skill) return [
     new TextRun({ text: `${block.skill.category}:`, ...style, bold: true }),
     new TextRun({ text: ` ${block.skill.items}`, ...style }),
@@ -54,7 +53,7 @@ export async function createResumeDOCX(resume: AtsDocument, blocks = exportBlock
         ...(block.section === "header" ? { alignment: AlignmentType.CENTER } : {}),
         keepNext: index < unit.blocks.length - 1,
         keepLines: true,
-        spacing: { before: block.kind === "heading" ? 240 : 0, after: 120, line: 300 },
+        spacing: { before: block.kind === "heading" ? 240 : 0, after: block.employment ? 0 : 120, line: 300 },
       }))),
     }],
   });

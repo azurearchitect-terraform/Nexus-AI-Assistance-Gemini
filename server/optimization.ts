@@ -97,7 +97,7 @@ export async function extractRelevantResumeData(resumeText: string, geminiApiKey
         { "title": "Project Name", "description": "Full Description" }
       ],
       "education": [
-        { "degree": "e.g. B.Tech in Computer Science", "institution": "e.g. Stanford University", "expected_completion": "e.g. 2018" },
+        { "degree": "e.g. B.Tech in Computer Science", "institution": "e.g. Stanford University", "semester": "e.g. 5, only if the source states it", "expected_completion": "e.g. 2018" },
         "Or just string representing school and degree"
       ],
       "certifications": [

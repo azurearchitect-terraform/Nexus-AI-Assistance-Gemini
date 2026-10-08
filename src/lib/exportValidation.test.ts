@@ -40,5 +40,5 @@ test("plain text comes directly from canonical blocks with ordinary list markers
   const output = plainResumeText(resume);
   assert.ok(output.includes("Work Experience"));
   assert.ok(output.includes("- • Embedded bullet"));
-  assert.ok(output.includes("Engineer | A | 2019 - 2021"));
+  assert.ok(output.includes("Engineer | 2019 - 2021\nA\n"), "role line then company line");
 });

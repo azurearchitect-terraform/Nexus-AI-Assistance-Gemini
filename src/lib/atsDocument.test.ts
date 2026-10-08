@@ -32,20 +32,25 @@ test("blocks and preview preserve body contacts, full hyperlink, standard headin
   const resume = canonicalResume(source);
   const blocks = exportBlocks(resume);
   assert.deepEqual(blocks.filter(block => block.kind === "heading").map(block => block.text),
-    ["Professional Summary", "Skills", "Work Experience", "Projects", "Certifications", "Education"]);
+    ["Professional Summary", "Skills", "Certifications", "Work Experience", "Projects", "Education"]);
   assert.equal(blocks.find(block => block.kind === "contact")?.text,
     "London | taylor@example.org | +44 20 7946 0958 | linkedin.com/in/taylor-example");
   assert.equal(blocks.find(block => block.kind === "contact")?.link, "https://linkedin.com/in/taylor-example");
   assert.deepEqual(blocks.find(block => block.employment)?.employment,
-    { title: "Engineer", company: "Example Services", dates: "May 2019 - Aug 2021" });
-  assert.ok(blocks.some(block => block.text === "Engineer | Example Services | May 2019 - Aug 2021"));
+    { title: "Engineer", dates: "May 2019 - Aug 2021" });
+  const role = blocks.findIndex(block => block.text === "Engineer | May 2019 - Aug 2021");
+  assert.ok(role >= 0);
+  assert.deepEqual(blocks[role + 1], { kind: "text", section: "experience", unit: "experience:0", text: "Example Services", employer: true });
   const html = renderToStaticMarkup(createElement(AtsResume, { blocks, masked: false }));
   assert.ok(html.includes('href="https://linkedin.com/in/taylor-example"'));
   assert.ok(html.includes("<li"));
   assert.ok(!/<(?:table|header|footer|img)\b/.test(html));
   for (const block of blocks) assert.ok(html.includes(block.text) || block.kind === "contact" || block.employment);
   assert.ok(html.includes("<strong>Engineer</strong>"));
-  assert.ok(html.includes("<strong>Example Services</strong>"));
+  assert.ok(html.includes("<p style=\"margin:0 0 4pt;overflow-wrap:break-word;break-after:avoid\"><strong>Example Services</strong></p>"),
+    "company is a separate bold line");
+  assert.ok(html.indexOf("<strong>Engineer</strong>") < html.indexOf("<strong>Example Services</strong>"));
+  assert.ok(html.includes("<strong>Migration</strong>"), "project titles are bold");
   assert.ok(html.includes('text-align:right'));
   assert.ok(html.includes("text-align:center"));
   assert.ok(!html.includes(">https://linkedin.com"));
@@ -115,9 +120,9 @@ test("export units keep entries and lists intact, merging section headings into 
   const units = groupExportUnits(blocks);
   assert.deepEqual(units.flatMap(unit => unit.blocks), blocks, "text order and content are untouched");
   assert.deepEqual(units.map(unit => unit.unit),
-    ["header", "summary", "skills", "experience:0", "experience:1", "projects:0", "projects:1", "projects:2", "certifications", "education"]);
-  assert.deepEqual(units.find(unit => unit.unit === "experience:0")!.blocks.map(block => block.kind), ["heading", "text", "bullet", "bullet"]);
-  assert.deepEqual(units.find(unit => unit.unit === "experience:1")!.blocks.map(block => block.kind), ["text", "bullet"]);
+    ["header", "summary", "skills", "certifications", "experience:0", "experience:1", "projects:0", "projects:1", "projects:2", "education"]);
+  assert.deepEqual(units.find(unit => unit.unit === "experience:0")!.blocks.map(block => block.kind), ["heading", "text", "text", "bullet", "bullet"]);
+  assert.deepEqual(units.find(unit => unit.unit === "experience:1")!.blocks.map(block => block.kind), ["text", "text", "bullet"]);
   assert.deepEqual(units.find(unit => unit.unit === "projects:0")!.blocks.map(block => block.text), ["Projects", "First project", "First description."]);
   for (const section of ["summary", "skills", "experience", "projects", "certifications", "education"]) {
     const group = units.find(unit => unit.section === section)!;
@@ -131,4 +136,18 @@ test("export units keep entries and lists intact, merging section headings into 
   assert.equal((html.match(/<ul\b/g) || []).length, 3, "one list per role and certification list");
   assert.equal((html.match(/<li\b/g) || []).length, 5);
   assert.ok(html.includes("break-inside:avoid;page-break-inside:avoid"));
+});
+
+test("education uses Degree | Institution | Sem - N | Expected YYYY and restores source-only details", () => {
+  const entry = { degree: "Bachelor of Computer Applications (BCA)", institution: "Chandigarh University", semester: "5", expected_completion: "2027" };
+  const expected = "Bachelor of Computer Applications (BCA) | Chandigarh University | Sem - 5 | Expected 2027";
+  assert.equal(exportBlocks(canonicalResume({ ...source, education: [entry] })).at(-1)?.text, expected);
+  assert.equal(exportBlocks(canonicalResume({ ...source, education: [{ ...entry, semester: 5, expected_completion: "Expected : 2027" }] })).at(-1)?.text, expected);
+  const generated = { ...source, education: [{ degree: entry.degree, institution: "chandigarh university", expected_completion: "2027" }] };
+  const restored = canonicalResume(generated, {}, { ...source, education: [entry] });
+  assert.equal(exportBlocks(restored).at(-1)?.text, "Bachelor of Computer Applications (BCA) | chandigarh university | Sem - 5 | Expected 2027");
+  assert.equal(canonicalResume(generated, {}, { ...source, education: [{ ...entry, institution: "Other University" }] }).education, generated.education,
+    "details are never copied from a different institution");
+  assert.equal(exportBlocks(canonicalResume({ ...source, education: [{ degree: "BSc", institution: "Example University" } as ResumeData["education"][number]] })).at(-1)?.text,
+    "BSc | Example University", "no semester or date is invented");
 });

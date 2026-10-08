@@ -30,12 +30,13 @@ export function AtsResume({ blocks, masked, sectionStyle, onSection, sectionOnly
       if (block.kind === "heading") return <h2 key={index} style={{ ...style, fontSize: "12pt", fontWeight: "bold", breakAfter: "avoid",
         ...(standard ? { textTransform: "uppercase", borderBottom: "1px solid #000", paddingBottom: "2pt", letterSpacing: "0.05em" } : {}) }}>{content}</h2>;
       if (block.employment) {
-        const { title, company, dates } = block.employment;
-        return <div key={index} className="experience-heading" style={{ ...style, display: "flex", alignItems: "baseline", gap: "8pt", breakAfter: "avoid" }}>
-          <span>{title && <strong>{title}</strong>}{title && company ? " | " : ""}{company && <strong>{company}</strong>}</span>
+        const { title, dates } = block.employment;
+        return <div key={index} className="experience-heading" style={{ ...style, margin: 0, display: "flex", alignItems: "baseline", gap: "8pt", breakAfter: "avoid" }}>
+          {title && <strong>{title}</strong>}
           {dates && <span style={{ marginLeft: "auto", whiteSpace: "nowrap", textAlign: "right" }}>{dates}</span>}
         </div>;
       }
+      if (block.employer || block.projectTitle) return <p key={index} style={{ ...style, breakAfter: "avoid" }}><strong>{block.text}</strong></p>;
       if (block.skill) return <p key={index} style={style}><strong>{block.skill.category}:</strong> {block.skill.items}</p>;
       if (block.kind === "bullet") {
         if (unit.blocks[index - 1]?.kind === "bullet") return null;
